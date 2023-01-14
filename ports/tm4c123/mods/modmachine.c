@@ -47,6 +47,7 @@
 //#include "rng.h"
 // #include "storage.h"
 #include "pin.h"
+#include "pwm.h"
 //#include "timer.h"
 #include "usb.h"
 #include "timer.h"
@@ -473,6 +474,9 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CAN),                  MP_ROM_PTR(&machine_hard_can_type) },
 #if MICROPY_PY_MACHINE_HW_TIMER
     { MP_ROM_QSTR(MP_QSTR_Timer),                 MP_ROM_PTR(&machine_timer_type) },
+#endif
+#if MICROPY_PY_MACHINE_HW_PWM
+    { MP_ROM_QSTR(MP_QSTR_PWM),                 MP_ROM_PTR(&machine_pwm_type)},
 #endif
 
 #if 0

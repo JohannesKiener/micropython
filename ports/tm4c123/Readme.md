@@ -18,6 +18,7 @@
    - [UART](#uart)
    - [SPI](#spi)
    - [Timer](#timer)
+   - [PWM](#pwm)
 
 
 ## Build
@@ -271,4 +272,193 @@ Additionally, a Timer channel has to be initialized:
 A callback function for the timeout interrupt is added by calling the .irq() method:
 
     channel.irq(trigger=Timer.TIMEOUT, handler=lambda h: callbackFunc())
+
+---
+### PWM
+### Initialization example
+#### With Pin object:
+
+    from umachine import Pin, PWM
+    pin = Pin('PD0', Pin.OUT)
+    pwm = PWM(pin, freq = 1000, duty = 50)
+
+#### With Pin identifier:
+
+    from umachine import PWM
+    pwm = PWM('PD0', freq = 1000, duty = 50)
+
+#### With PWM module identifier (see https://www.ti.com/lit/ds/symlink/tm4c123gh6pm.pdf#page=1347&zoom=100,76,119):
+
+    from umachine import PWM
+    pwm = PWM(PWM.M1PWM0, pin = 'PD0', freq = 1000, duty = 50)
+
+<details>
+   <summary>PWM Module content</summary>
+
+   ### Constructors
+   ---
+      umachine.PWM(dest, [pin, active, invert, freq, duty, db_falling, db_rising, mode, irq, irq_mode])
+
+   Construct and returns a new PWM object with the following parameters:
+   - dest is a Pin object, the string identifier of a pin or one of the following:
+      - M0PWM0
+      - M0PWM1
+      - M0PWM2
+      - M0PWM3
+      - M0PWM4
+      - M0PWM5
+      - M0PWM6
+      - M0PWM7
+      - M1PWM0
+      - M1PWM1
+      - M1PWM2
+      - M1PWM3
+      - M1PWM4
+      - M1PWM5
+      - M1PWM6
+      - M1PWM7
+
+   For more parameters, see PWM.init()
+
+   Returns the PWM object
+
+
+   ### Methods
+   ---
+      PWM.init([pin, active, invert, freq, duty, db_falling, db_rising, mode, irq, irq_mode])
+
+   Initializes the PWM object with the following parameters:
+   - pin is the output pin object, or the string identifier of the pin if a PWM generator id is used for initialization. May be None or omitted to use pwm without outputting through a pin
+   - active specifies whether the state of the output pin is active
+   - invert inverts the state of the output pin
+   - freq specifies the frequency of the PWM signal
+   - duty specifies the duty cycle percentage of the PWM signal
+   - db_falling specifies the deadband delay in clock ticks on a falling edge
+   - db_rising specifies the deadband delay in clock ticks on a rising edge
+   - mode specifies the mode of the PWM object. It is the logical OR of the following:
+      - PWM_GEN_MODE_DOWN or PWM_GEN_MODE_UP_DOWN to specify the counting mode
+      - PWM_GEN_MODE_SYNC or PWM_GEN_MODE_NO_SYNC to specify the counter load and comparator update synchronization mode
+      - PWM_GEN_MODE_DBG_RUN or PWM_GEN_MODE_DBG_STOP to specify the debug behavior
+      - PWM_GEN_MODE_GEN_NO_SYNC, PWM_GEN_MODE_GEN_SYNC_LOCAL, or PWM_GEN_MODE_GEN_SYNC_GLOBAL to specify the update synchronization mode for generator counting mode changes
+      - PWM_GEN_MODE_DB_NO_SYNC, PWM_GEN_MODE_DB_SYNC_LOCAL, or PWM_GEN_MODE_DB_SYNC_GLOBAL to specify the deadband parameter synchronization mode
+   - irq is the interrupt handler to attach. This function receives the status of the interrupt register via its first argument of type int
+   - irq_mode specifies interrupts and triggers to act upon. The irq_mode is the logical OR of the following: 
+      - PWM_INT_CNT_ZERO
+      - PWM_INT_CNT_LOAD
+      - PWM_INT_CNT_AU
+      - PWM_INT_CNT_AD
+      - PWM_INT_CNT_BU
+      - PWM_INT_CNT_BD
+      - PWM_TR_CNT_ZERO
+      - PWM_TR_CNT_LOAD
+      - PWM_TR_CNT_AU
+      - PWM_TR_CNT_AD
+      - PWM_TR_CNT_BU
+      - PWM_TR_CNT_BD
+
+   Returns the PWM object
+
+
+   ---
+      PWM.deinit()
+
+   Deinitializes the PWM object
+
+   Returns None
+
+
+   ---
+      PWM.active([value])
+
+   Sets the output of a PWM object
+   - value is the desired value
+
+   Returns whether the output is active
+
+
+   ---
+      PWM.invert([value])
+
+   Sets the output inversion of a PWM object
+   - value is the desired value
+
+   Returns whether the output is inverted
+
+
+   ---
+      PWM.clock_divider[value])
+
+   Sets the global clock divider for the PWM block.
+   - value is the desired value, one of the following:  
+      - CLK_DIV_1
+      - CLK_DIV_2
+      - CLK_DIV_4
+      - CLK_DIV_8
+      - CLK_DIV_16
+      - CLK_DIV_32
+      - CLK_DIV_64
+
+   Returns a tuple of the current clock divider and the PWM frequency of the module
+
+
+   ---
+      PWM.freq([value])
+
+   Sets the frequency of a PWM object
+   - value is the desired value
+
+   Returns the current frequency
+
+
+   ---
+      PWM.duty([value])
+
+   Sets the duty cycle percentage of a PWM object
+   - value is the desired value
+
+   Returns the current duty cycle
+
+
+   ---
+      PWM.sync([pwm, *])
+
+   Syncs the provided PWM objects
+   - pwm are pwm objects to sync
+
+   Returns None
+
+
+   ---
+      PWM.db([db_falling, db_rising])
+
+   Sets the deadband delay of a PWM object. This delay is being shared within a generator. The deadband values are clock ticks. The PWM clock divider applies
+   - db_falling is the desired deadband delay for a falling edge
+   - db_rising is the desired deadband delay for a rising edge
+
+   Returns a tuple of the current deadband delay values
+
+
+   ---
+      PWM.irq([callback, mode])
+
+   Sets the interrupt callback and mode for the PWM object
+   - callback is the interrupt callback function to attach. The callback function receives the value of the interrupt status register via its first argument of type int. The triggered interrupt will be cleared automatically after exiting the callback.
+   - mode specifies interrupts and triggers to act upon. It is the logical OR of the following: 
+      - PWM_INT_CNT_ZERO
+      - PWM_INT_CNT_LOAD
+      - PWM_INT_CNT_AU
+      - PWM_INT_CNT_AD
+      - PWM_INT_CNT_BU
+      - PWM_INT_CNT_BD
+      - PWM_TR_CNT_ZERO
+      - PWM_TR_CNT_LOAD
+      - PWM_TR_CNT_AU
+      - PWM_TR_CNT_AD
+      - PWM_TR_CNT_BU
+      - PWM_TR_CNT_BD
+
+   Returns a tuple of the current callback and mode.
+
+</details>  
+  
 

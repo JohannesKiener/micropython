@@ -85,6 +85,7 @@
 #include "gccollect.h"
 #include "extint.h"
 #include "timer.h"
+#include "pwm.h"
 #include "uart.h"
 #include "storage.h"
 #include "can.h"
@@ -611,6 +612,39 @@ void TIMER5AIntHandler(void)
 void TIMER5BIntHandler(void) 
 {
     TIMERGenericIntHandler(TIMER5_BASE, TIMER_B);
+}
+
+void PWM0GEN0_Handler(void)
+{
+    pwm_irq_handler(0, 0);
+}
+void PWM0GEN1_Handler(void)
+{
+    pwm_irq_handler(0, 1);
+}
+void PWM0GEN2_Handler(void)
+{
+    pwm_irq_handler(0, 2);
+}
+void PWM0GEN3_Handler(void)
+{
+    pwm_irq_handler(0, 3);
+}
+void PWM1GEN0_Handler(void)
+{
+    pwm_irq_handler(1, 0);
+}
+void PWM1GEN1_Handler(void)
+{
+    pwm_irq_handler(1, 1);
+}
+void PWM1GEN2_Handler(void)
+{
+    pwm_irq_handler(1, 2);
+}
+void PWM1GEN3_Handler(void)
+{
+    pwm_irq_handler(1, 3);
 }
 
 void CAN0_IRQHandler(void){

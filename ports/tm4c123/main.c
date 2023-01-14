@@ -61,6 +61,7 @@
 #include "spi.h"
 #include "uart.h"
 #include "timer.h"
+#include "pwm.h"
 // #include "led.h"
 #include "pin.h"
 #include "extint.h"
@@ -493,6 +494,7 @@ soft_reset:
 
     timer_init0();
     irq_init0();
+    pwm_init0();
 
 
     // TODO Missing Repl Config

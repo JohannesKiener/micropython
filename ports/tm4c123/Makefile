@@ -209,6 +209,7 @@ SRC_MOD = $(addprefix mods/,\
 	usb.c \
 	i2c.c \
 	spi.c \
+	pwm.c \
 	)
 
 	

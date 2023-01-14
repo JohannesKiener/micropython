@@ -103,6 +103,15 @@ void TIMER4BIntHandler(void);
 void TIMER5AIntHandler(void);
 void TIMER5BIntHandler(void);
 
+void PWM0GEN0_Handler(void);
+void PWM0GEN1_Handler(void);
+void PWM0GEN2_Handler(void);
+void PWM0GEN3_Handler(void);
+void PWM1GEN0_Handler(void);
+void PWM1GEN1_Handler(void);
+void PWM1GEN2_Handler(void);
+void PWM1GEN3_Handler(void);
+
 void CAN0_IRQHandler(void);
 void CAN1_IRQHandler(void);
 
