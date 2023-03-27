@@ -93,6 +93,7 @@
 #define MICROPY_PY_MACHINE_HW_TIMER    (1)
 #define MICROPY_PY_MACHINE_HW_PWM      (1)
 #define MICROPY_PY_MACHINE_HW_I2C      (1)
+#define MICROPY_PY_MACHINE_HW_WATCHDOG (1)
 #define MICROPY_HW_ENABLE_USB          (0)
 
 // fatfs configuration used in ffconf.h
@@ -242,6 +243,7 @@ extern const struct _mp_obj_module_t mp_module_uos;
     struct _machine_hard_i2c_obj_t *machine_i2c_obj_all[MICROPY_HW_MAX_I2C];\
     struct _machine_timer_obj_t *machine_timer_obj_all[MICROPY_HW_MAX_TIMER];\
     struct _machine_pwm_obj_t *machine_pwm_obj_all[MICROPY_HW_MAX_PWM];\
-    struct _machine_hard_can_obj_t *machine_can_obj_all[MICROPY_HW_MAX_CAN];
+    struct _machine_hard_can_obj_t *machine_can_obj_all[MICROPY_HW_MAX_CAN];\
+    struct _machine_watchdog_obj_t *machine_watchdog_obj_all[MICROPY_HW_MAX_CAN];
 
 // EOF

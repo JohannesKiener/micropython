@@ -35,8 +35,9 @@
 #define MICROPY_HW_MAX_UART (8)
 #define MICROPY_HW_MAX_SPI (4)
 #define MICROPY_HW_MAX_I2C (4)
-#define MICROPY_HW_MAX_TIMER (6)
+#define MICROPY_HW_MAX_TIMER (6)    // TODO TIMER see if widetimer needs more
 #define MICROPY_HW_MAX_CAN (2)
+#define MICROPY_HW_MAX_WATCHDOG (2)
 
 #define MICROPY_PY_MACHINE_SPI (0)
 
@@ -115,6 +116,9 @@
 #define MICROPY_HW_I2C3_NAME	"3"
 #define MICROPY_HW_I2C3_SCL	(pin_PD0)
 #define MICROPY_HW_I2C3_SDA	(pin_PD1)
+
+#define MICROPY_HW_WATCHDOG0_NAME "0"
+#define MICROPY_HW_WATCHDOG1_NAME "1"
 
 // USB defines
 #if MICROPY_HW_ENABLE_USB

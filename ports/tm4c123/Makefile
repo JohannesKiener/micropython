@@ -210,6 +210,7 @@ SRC_MOD = $(addprefix mods/,\
 	i2c.c \
 	spi.c \
 	pwm.c \
+	watchdog.c\
 	)
 
 	

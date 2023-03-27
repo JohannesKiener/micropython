@@ -84,6 +84,7 @@
 #include "dma.h"
 #include "mpirq.h"
 //#include "usb_dev_msc.h"
+#include "watchdog.h"
 
 // prevent clash between driverlib and CMSIS
 #ifdef NVIC_BASE

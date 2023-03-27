@@ -59,6 +59,7 @@
 #include "uart.h"
 
 #include "can.h"
+#include "watchdog.h"
 //#include "wdt.h"
 //#include "genhdr/pllfreqtable.h"
 
@@ -477,6 +478,9 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
 #endif
 #if MICROPY_PY_MACHINE_HW_PWM
     { MP_ROM_QSTR(MP_QSTR_PWM),                 MP_ROM_PTR(&machine_pwm_type)},
+#endif
+#if MICROPY_PY_MACHINE_HW_WATCHDOG
+    { MP_ROM_QSTR(MP_QSTR_WDT),                 MP_ROM_PTR(&machine_watchdog_type)},
 #endif
 
 #if 0
