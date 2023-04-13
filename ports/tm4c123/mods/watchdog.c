@@ -43,11 +43,9 @@
 #include "driverlib/watchdog.h"
 #include "inc/hw_ints.h"
 
-#define WATCHDOG_DEFAULT_TIMEOUT 5000 // in ms
-//#define WATCHDOG_MAX_TIMEOUT #TODO
+#define WATCHDOG_DEFAULT_TIMEOUT_US 5000 // in us
 
 // Holds the global pointers for the 2 Wachtdogtimer modules that are needed in the IRQ Handler
-// TODO Maybe not needed as global
 STATIC machine_watchdog_obj_t *glob_wdt_self[2];    
 
 
@@ -79,33 +77,72 @@ STATIC int wdt_find(mp_obj_t id) {
     }
 }
 
+// set/resets the watchdog timer, with the right value so the timeout irq/reset start at the needed time
+STATIC void reset_watchdog(machine_watchdog_obj_t *self){
+    // Check to see if the registers are locked, and if so, unlock them.
+    if(WatchdogLockState(self->watchdog_base) == true){
+        WatchdogUnlock(self->watchdog_base);
+    }
+    
+    // no handler registered, only reset requested
+    if(self->call_back_fun==MP_OBJ_NULL){
+        // here Timer value halfed, because tiva only resets when the irq is not cleared 
+        // and the timer reaches zero a second time
+        WatchdogIntClear(self->watchdog_base);                  // clears irq, so next time again-> irq first and reset second
+        WatchdogReloadSet(self->watchdog_base, self->timeout/2);    
+        // Here no handler is registered and the irq does not reach nvic, so no irq in cpu
+    } else {
+        // handler registered, first timeout calles handler -> if stuck in hander to long -> second timeout reset
+        WatchdogReloadSet(self->watchdog_base, self->timeout); 
+    }
+}
 
 /* ----------- Interrupt functions -------------- */
 /* ---------------------------------------------- */
 
+STATIC void watchdog_set_handler(machine_watchdog_obj_t * self,mp_obj_t handler){
+    // check if funktion is callable
+    if(!mp_obj_is_callable(handler)){
+        mp_raise_TypeError(MP_ERROR_TEXT("Callback handler is not callable"));
+    }
+    // Disable IRQ with mask in NVIC
+    WatchdogIntUnregister(self->watchdog_base);
+
+    if(WATCHDOG0_BASE==self->watchdog_base){
+        WatchdogIntRegister(self->watchdog_base, &WATCHDOG0_IRQHandler);
+    }else{
+        WatchdogIntRegister(self->watchdog_base, &WATCHDOG1_IRQHandler);
+    }
+}
+
+// Interrupthandler
+void WATCHDOGGenericIntHandler(uint32_t base){
+    machine_watchdog_obj_t *self=glob_wdt_self[WATCHDOG0_BASE==base? 0 : 1];
+
+    if (self->call_back_fun != mp_const_none) {
+        // no allocation allowed
+        gc_lock();
+        nlr_buf_t nlr;
+        if (nlr_push(&nlr) == 0) {
+            // bus_off irq (idx_msg_obj = 33)   -> def callbackfun(self): ...
+            mp_call_function_1(self->call_back_fun,MP_OBJ_FROM_PTR(self));
+            nlr_pop();
+        } else {
+            // Uncaught exception; leads to a restart
+            mp_printf(MICROPY_ERROR_PRINTER, "uncaught exception in watchdogtimer(%lu) handler\n", self->wdt_id);
+            mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
+            WatchdogReloadSet(self->watchdog_base,0);    // immediate reset
+        }
+        gc_unlock();
+        WatchdogIntClear(base);
+    }
+}
 
 /* ------------ init/deinit Helper--------------- */
 /* ---------------------------------------------- */
 
-// Initializes the CAN Module und it's Pins
-void watchdog_init(machine_watchdog_obj_t *self){
-
-    // TODO
-    uint32_t a=SysCtlClockGet();
-    printf("clk:%lu\n",a);
-
-    if(self->wdt_id==WDT0){
-        self->watchdog_base=WATCHDOG0_BASE;
-        self->periph=SYSCTL_PERIPH_WDOG0;
-
-    } else if(self->wdt_id==WDT1){
-        self->watchdog_base=WATCHDOG1_BASE;
-        self->periph=SYSCTL_PERIPH_WDOG1;
-
-    } else{
-         // CAN does not exist for this board (shouldn't get here, should be checked by caller)
-        return;
-    }
+// Initializes and starts the WDT 
+STATIC void watchdog_init(machine_watchdog_obj_t *self){
 
     // disable WDT module 
     SysCtlPeripheralDisable(self->periph);
@@ -116,7 +153,7 @@ void watchdog_init(machine_watchdog_obj_t *self){
     // enable modul
     SysCtlPeripheralEnable(self->periph);
 
-    // Wait for the CAN0 module to be ready.
+    // Wait for the WDT module to be ready.
     while(!SysCtlPeripheralReady(self->periph)){}
 
     // Check to see if the registers are locked, and if so, unlock them.
@@ -124,21 +161,24 @@ void watchdog_init(machine_watchdog_obj_t *self){
         WatchdogUnlock(self->watchdog_base);
     }
 
+    if(self->call_back_fun!=MP_OBJ_NULL){
+        watchdog_set_handler(self,self->call_back_fun);
+    }
+
     // Initialize the watchdog timer.
-    WatchdogReloadSet(self->watchdog_base, self->timeout);
+    reset_watchdog(self);
     // Enable the reset.
     WatchdogResetEnable(self->watchdog_base);
     // Enable the watchdog timer.
     WatchdogEnable(self->watchdog_base);
-
-    self->is_enabled=true;
 }
 
-STATIC void machine_watchdog_init_helper(machine_watchdog_obj_t *self_in, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args){
-    enum {ARG_timeout};
+STATIC void watchdog_init_helper(machine_watchdog_obj_t *self_in, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args){
+    enum {ARG_timeout,ARG_handler};
 
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_timeout,          MP_ARG_KW_ONLY | MP_ARG_INT,    {.u_int = WATCHDOG_DEFAULT_TIMEOUT} },
+        { MP_QSTR_timeout,          MP_ARG_KW_ONLY | MP_ARG_INT,    {.u_int = WATCHDOG_DEFAULT_TIMEOUT_US} },
+        { MP_QSTR_handler,          MP_ARG_KW_ONLY | MP_ARG_OBJ,    {.u_obj = MP_OBJ_NULL} },
     };
 
     // parse args
@@ -146,44 +186,87 @@ STATIC void machine_watchdog_init_helper(machine_watchdog_obj_t *self_in, size_t
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     machine_watchdog_obj_t *self = (machine_watchdog_obj_t *)self_in;
-
+    
     // --Check the ranges of values-- 
-    // TODO check to big/small values 
-    // if(args[ARG_timeout].u_int>64){
-    //     mp_raise_TypeError(MP_ERROR_TEXT("prescaler must be within [1,...,64]"));
-    // }
+    if(args[ARG_timeout].u_int<0){
+        mp_raise_ValueError(MP_ERROR_TEXT("timeout can not be negative"));
+    }
+
+    uint32_t clk;
+
+    // id
+    if(self->wdt_id==WDT0){
+        self->watchdog_base=WATCHDOG0_BASE;
+        self->periph=SYSCTL_PERIPH_WDOG0;
+        clk=SysCtlClockGet();
+
+    } else if(self->wdt_id==WDT1){
+        self->watchdog_base=WATCHDOG1_BASE;
+        self->periph=SYSCTL_PERIPH_WDOG1;
+        
+        // TODO maybe remove
+        // long int reg=HWREG(SYSCTL_BASE+0x154);
+        // clk=reg & 0x0000007F;
+        // printf("%lu",clk);
+        clk=16000000;       // PISCO 16 Mhz clk      
+    } else{
+        mp_raise_ValueError(MP_ERROR_TEXT("Watchdogtimer does not exist"));
+    }
+
+    uint32_t timeout_us=args[ARG_timeout].u_int;
+    uint32_t timeout_ticks=(uint32_t) (timeout_us*(clk/1000000.0));  // timeout given in us
+    uint32_t max_timeout_us=(uint32_t) (0xFFFFFFFF)*(1000000.0/clk);
+    if(timeout_us>max_timeout_us){
+        mp_printf(MICROPY_ERROR_PRINTER, "Max timeout with current clk -> %u us\n", max_timeout_us);
+        mp_raise_ValueError(MP_ERROR_TEXT("timeout value is to big"));
+    }
 
     // --Saving the Settings--
-    self->timeout = args[ARG_timeout].u_int;
-       
-    // calling CAN-Init Function 
+    self->timeout = timeout_ticks;
+
+    self->call_back_fun = args[ARG_handler].u_obj;
+
+    // calling watchdog-Init Function 
     watchdog_init(self);
 }
 
 /* --------- Binding for Micropython ------------ */
 /* ---------------------------------------------- */
-
-STATIC mp_obj_t machine_watchdog_deinit(){
-    //TODO
+STATIC mp_obj_t machine_watchdog_feed(mp_obj_t self_in){
+    machine_watchdog_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    reset_watchdog(self);
     return mp_const_none;
 }
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_watchdog_feed_obj,machine_watchdog_feed);
+
+// SEE if deinit even makes sense
+STATIC mp_obj_t machine_watchdog_deinit(machine_watchdog_obj_t * self){
+    // Disable IRQ with mask in NVIC
+    WatchdogIntUnregister(self->watchdog_base);
+    self->is_enabled=false;
+    self->call_back_fun=mp_const_none;
+    return mp_const_none;
+}
+
+
+//TODO see what happens on reconfiguring 
 
 // WDT(id,*,timeout)
 STATIC mp_obj_t machine_watchdog_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
-    mp_arg_check_num(n_args, n_kw, 1, 1, true);
+    mp_arg_check_num(n_args, n_kw, 1, 2, true);
 
-    printf("nargs: %u, kw_args %u\n",n_args,n_kw);
     // find WDT Port id
     mp_uint_t wdt_idx=wdt_find(args[0]);
 
     // get/create wdt object
     if (MP_STATE_PORT(machine_watchdog_obj_all)[wdt_idx] == NULL) {
-        // create new can object
+        // create new wdt object
         glob_wdt_self[wdt_idx] = m_new_obj(machine_watchdog_obj_t);
         glob_wdt_self[wdt_idx]->base.type = &machine_watchdog_type;
         glob_wdt_self[wdt_idx]->wdt_id = wdt_idx;
         glob_wdt_self[wdt_idx]->is_enabled = false;
+        glob_wdt_self[wdt_idx]->call_back_fun=mp_const_none;
         MP_STATE_PORT(machine_watchdog_obj_all)[wdt_idx] = glob_wdt_self[wdt_idx];
     } else {
         // reference existing wdt object
@@ -201,10 +284,10 @@ STATIC mp_obj_t machine_watchdog_make_new(const mp_obj_type_t *type, size_t n_ar
         // start the peripheral
         mp_map_t kw_args;
         mp_map_init_fixed_table(&kw_args, n_kw, args + n_args);
-        machine_watchdog_init_helper(glob_wdt_self[wdt_idx], n_args - 1, args + 1, &kw_args);
+        watchdog_init_helper(glob_wdt_self[wdt_idx], n_args - 1, args + 1, &kw_args);
     }
 
-    return MP_OBJ_FROM_PTR(args[0]);
+    return MP_OBJ_FROM_PTR(glob_wdt_self[wdt_idx]);
 }
 
 // prints importent information about the WDT obj
@@ -215,8 +298,7 @@ STATIC void machine_watchdog_print(const mp_print_t *print, mp_obj_t self_in, mp
 
 STATIC const mp_rom_map_elem_t machine_watchdog_locals_dict_table[] = {
 
-//    { MP_ROM_QSTR(MP_QSTR_send),            MP_ROM_PTR(&mp_machine_hard_can_send_obj) },
-//    { MP_ROM_QSTR(MP_QSTR_receive),         MP_ROM_PTR(&mp_machine_hard_can_receive_obj) },
+    { MP_ROM_QSTR(MP_QSTR_feed),            MP_ROM_PTR(&machine_watchdog_feed_obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(machine_watchdog_locals_dict, machine_watchdog_locals_dict_table);
@@ -228,5 +310,3 @@ const mp_obj_type_t machine_watchdog_type = {
     .make_new = machine_watchdog_make_new,
     .locals_dict = (mp_obj_dict_t *)&machine_watchdog_locals_dict,
 };
-
-// TODO Filter

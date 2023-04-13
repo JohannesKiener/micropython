@@ -115,5 +115,8 @@ void PWM1GEN3_Handler(void);
 void CAN0_IRQHandler(void);
 void CAN1_IRQHandler(void);
 
+void WATCHDOG0_IRQHandler(void);
+void WATCHDOG1_IRQHandler(void);
+
 
 #endif // MICROPY_INCLUDED_TM4C_STM32_IT_H

@@ -34,7 +34,7 @@
 typedef struct _machine_watchdog_obj_t {
     mp_obj_base_t base;
 
-    uint32_t watchdog_base;              // base address of can module
+    uint32_t watchdog_base;              // base address of watchdog module
     uint32_t periph;                    // address needed for tivaware sysctl functions
     uint32_t wdt_id;
     bool is_enabled;
@@ -47,6 +47,6 @@ typedef struct _machine_watchdog_obj_t {
 
 extern const mp_obj_type_t machine_watchdog_type;
 
-void WatchdogIntHandler(uint32_t base);
+void WATCHDOGGenericIntHandler(uint32_t base);
 
 #endif // MICROPY_INCLUDED_WATCHDOG_H

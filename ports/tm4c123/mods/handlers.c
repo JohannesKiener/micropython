@@ -89,6 +89,7 @@
 #include "uart.h"
 #include "storage.h"
 #include "can.h"
+#include "watchdog.h"
 // #include "dma.h"
 // #include "i2c.h"
 // #include "usb.h"
@@ -653,6 +654,14 @@ void CAN0_IRQHandler(void){
 
 void CAN1_IRQHandler(void){
     CANGenericIntHandler(CAN1_BASE);
+}
+
+void WATCHDOG0_IRQHandler(void){
+    WATCHDOGGenericIntHandler(WATCHDOG0_BASE);
+}
+
+void WATCHDOG1_IRQHandler(void){
+    WATCHDOGGenericIntHandler(WATCHDOG1_BASE);
 }
 
 #if defined(TIM6) // STM32F401 doesn't have TIM6
