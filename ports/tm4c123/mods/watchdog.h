@@ -46,6 +46,7 @@ typedef struct _machine_watchdog_obj_t {
 } machine_watchdog_obj_t;
 
 extern const mp_obj_type_t machine_watchdog_type;
+void watchdog_deinit();
 
 void WATCHDOGGenericIntHandler(uint32_t base);
 

@@ -631,6 +631,9 @@ soft_reset_exit:
     #if MICROPY_HW_ENABLE_CAN
     can_deinit();
     #endif
+    #if MICROPY_PY_MACHINE_HW_WATCHDOG
+    watchdog_deinit();
+    #endif
     machine_deinit();
 
     #if MICROPY_PY_THREAD

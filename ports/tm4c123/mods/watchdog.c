@@ -84,17 +84,19 @@ STATIC void reset_watchdog(machine_watchdog_obj_t *self){
         WatchdogUnlock(self->watchdog_base);
     }
     
+    WatchdogIntClear(self->watchdog_base);
+    
     // no handler registered, only reset requested
     if(self->call_back_fun==MP_OBJ_NULL){
         // here Timer value halfed, because tiva only resets when the irq is not cleared 
         // and the timer reaches zero a second time
-        WatchdogIntClear(self->watchdog_base);                  // clears irq, so next time again-> irq first and reset second
-        WatchdogReloadSet(self->watchdog_base, self->timeout/2);    
+        WatchdogReloadSet(self->watchdog_base, self->timeout/2);   
         // Here no handler is registered and the irq does not reach nvic, so no irq in cpu
     } else {
+
         // handler registered, first timeout calles handler -> if stuck in hander to long -> second timeout reset
         WatchdogReloadSet(self->watchdog_base, self->timeout); 
-    }
+    }    
 }
 
 /* ----------- Interrupt functions -------------- */
@@ -169,6 +171,8 @@ STATIC void watchdog_init(machine_watchdog_obj_t *self){
     reset_watchdog(self);
     // Enable the reset.
     WatchdogResetEnable(self->watchdog_base);
+    // uncomment for debugging
+    //WatchdogStallEnable(self->watchdog_base);
     // Enable the watchdog timer.
     WatchdogEnable(self->watchdog_base);
 }
@@ -230,6 +234,14 @@ STATIC void watchdog_init_helper(machine_watchdog_obj_t *self_in, size_t n_args,
     watchdog_init(self);
 }
 
+void watchdog_deinit(machine_watchdog_obj_t * self){
+    // Disable IRQ with mask in NVIC
+    WatchdogIntUnregister(self->watchdog_base);
+    self->is_enabled=false;
+    self->call_back_fun=mp_const_none;
+}
+
+
 /* --------- Binding for Micropython ------------ */
 /* ---------------------------------------------- */
 STATIC mp_obj_t machine_watchdog_feed(mp_obj_t self_in){
@@ -238,16 +250,6 @@ STATIC mp_obj_t machine_watchdog_feed(mp_obj_t self_in){
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_watchdog_feed_obj,machine_watchdog_feed);
-
-// SEE if deinit even makes sense
-STATIC mp_obj_t machine_watchdog_deinit(machine_watchdog_obj_t * self){
-    // Disable IRQ with mask in NVIC
-    WatchdogIntUnregister(self->watchdog_base);
-    self->is_enabled=false;
-    self->call_back_fun=mp_const_none;
-    return mp_const_none;
-}
-
 
 //TODO see what happens on reconfiguring 
 
@@ -276,7 +278,7 @@ STATIC mp_obj_t machine_watchdog_make_new(const mp_obj_type_t *type, size_t n_ar
     // The caller is requesting a reconfiguration of the hardware
     // this can only be done if the hardware is in init mode
     if (glob_wdt_self[wdt_idx]->is_enabled) {
-        machine_watchdog_deinit((mp_obj_t)glob_wdt_self[wdt_idx]);
+        watchdog_deinit(glob_wdt_self[wdt_idx]);
     }
     
     
@@ -292,7 +294,21 @@ STATIC mp_obj_t machine_watchdog_make_new(const mp_obj_type_t *type, size_t n_ar
 
 // prints importent information about the WDT obj
 STATIC void machine_watchdog_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
-    printf("print called\n");
+    machine_watchdog_obj_t *self=MP_OBJ_TO_PTR(self_in);
+    uint32_t current_wdt_value=WatchdogValueGet(self->watchdog_base);
+    uint32_t reload_wdt_value=self->timeout;
+
+    // no handler-> second irq leads to reset 
+    // so be carefull: 
+    // without irq the reload value corresponds to half of the time passed for the reset
+    if(self->call_back_fun == MP_OBJ_NULL){
+        reload_wdt_value=reload_wdt_value/2;
+    }
+    printf("<WTD Object>\n");
+    printf("Watchdog Timer: %lu\n",self->wdt_id);
+    printf("Current value: %lu\n",current_wdt_value);
+    printf("Reload value: %lu\n",reload_wdt_value);
+    printf("Irq enabled: %u\n",self->call_back_fun == MP_OBJ_NULL? 0 : 1);
 }
 
 
