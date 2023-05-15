@@ -38,6 +38,7 @@
 #define MICROPY_HW_MAX_TIMER (6)    // TODO TIMER see if widetimer needs more
 #define MICROPY_HW_MAX_CAN (2)
 #define MICROPY_HW_MAX_WATCHDOG (2)
+#define MICROPY_HW_MAX_QEI (2)
 
 #define MICROPY_PY_MACHINE_SPI (0)
 
@@ -119,6 +120,16 @@
 
 #define MICROPY_HW_WATCHDOG0_NAME "0"
 #define MICROPY_HW_WATCHDOG1_NAME "1"
+
+#define MICROPY_HW_QEI0_NAME "0"
+#define MICROPY_HW_QEI0_IDX (pin_PD3)
+#define MICROPY_HW_QEI0_PHA (pin_PD6)
+#define MICROPY_HW_QEI0_PHB (pin_PD7)
+
+#define MICROPY_HW_QEI1_NAME "1"
+#define MICROPY_HW_QEI1_IDX (pin_PC4)
+#define MICROPY_HW_QEI1_PHA (pin_PC5)
+#define MICROPY_HW_QEI1_PHB (pin_PC6)
 
 // USB defines
 #if MICROPY_HW_ENABLE_USB

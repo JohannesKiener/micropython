@@ -211,6 +211,7 @@ SRC_MOD = $(addprefix mods/,\
 	spi.c \
 	pwm.c \
 	watchdog.c\
+	qei.c\
 	)
 
 	

@@ -172,7 +172,7 @@ STATIC void watchdog_init(machine_watchdog_obj_t *self){
     // Enable the reset.
     WatchdogResetEnable(self->watchdog_base);
     // uncomment for debugging
-    //WatchdogStallEnable(self->watchdog_base);
+    // WatchdogStallEnable(self->watchdog_base);
     // Enable the watchdog timer.
     WatchdogEnable(self->watchdog_base);
 }
