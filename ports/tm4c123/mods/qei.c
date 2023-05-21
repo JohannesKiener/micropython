@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "py/runtime.h"
 #include "py/obj.h"
@@ -43,6 +44,8 @@
 #include "driverlib/qei.h"
 #include "inc/hw_ints.h" 
 
+uint32_t allowed_vel_divs[8]=  {QEI_VELDIV_1,QEI_VELDIV_2,QEI_VELDIV_4,QEI_VELDIV_8,
+                                 QEI_VELDIV_16, QEI_VELDIV_32,QEI_VELDIV_64,QEI_VELDIV_128};
 
 
 // Works out the Port ID
@@ -72,6 +75,7 @@ STATIC int qei_find(mp_obj_t id) {
             MP_ERROR_TEXT("Quadratur encoder (%s) doesn't exist"), qei_id));
     }
 }
+
 
 
 /* ------------ init/deinit Helper--------------- */
@@ -146,7 +150,7 @@ STATIC void qei_init(machine_qei_obj_t *self){
 
     // Operation mode
     flags|=(self->mode? QEI_CONFIG_CLOCK_DIR:QEI_CONFIG_QUADRATURE);
-    flags|=(self->both_edges? QEI_CONFIG_CAPTURE_A_B:QEI_CONFIG_CAPTURE_A);
+    flags|=(self->both_phases? QEI_CONFIG_CAPTURE_A_B:QEI_CONFIG_CAPTURE_A);
     flags|=(self->idx_reset? QEI_CONFIG_RESET_IDX:QEI_CONFIG_NO_RESET);
     flags|=(self->swap? QEI_CONFIG_SWAP:QEI_CONFIG_NO_SWAP);
 
@@ -162,40 +166,39 @@ STATIC void qei_init(machine_qei_obj_t *self){
         QEIFilterDisable(self->qei_base);
     }
 
+    // only activate velo calculation, when timeout > 0 is given
+    if(self->timeout > 0){
+        QEIVelocityDisable(self->qei_base);
+        QEIVelocityConfigure(self->qei_base,self->vel_div,self->timeout);
+        QEIVelocityEnable(self->qei_base);
+    }
+
+
     QEIEnable(self->qei_base);
 }
-// (maxpos,*,mode=False, both_edges=true, idx_reset=false, swap=False, filter=0)
+
+// TODO test prediv
+
+// (maxpos,*,mode=False, both_phases=true, idx_reset=false, swap=False, filter=0, timeout=0, prediv=QEI_VELDIV_1)
 STATIC void qei_init_helper(machine_qei_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args){
-    enum {ARG_maxpos,ARG_mode, ARG_both_edges,ARG_idx_reset,ARG_swap,ARG_filter};
+    enum {ARG_maxpos,ARG_mode, ARG_both_phases,ARG_idx_reset,ARG_swap,ARG_filter,ARG_timeout,ARG_vel_div};
 
     // TODO maybe add REQUIRED
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_max_pos,      MP_ARG_INT,                      {.u_int  = 0} },
+        { MP_QSTR_max_pos,      MP_ARG_REQUIRED| MP_ARG_INT,     {.u_int  = 0} },
         { MP_QSTR_mode,         MP_ARG_KW_ONLY | MP_ARG_BOOL,    {.u_bool = false} },           // TODO changes mode
-        { MP_QSTR_both_edges,   MP_ARG_KW_ONLY | MP_ARG_BOOL,    {.u_bool = false} },            // TODO see if both edegs make sense in dir mode
+        { MP_QSTR_both_phases,   MP_ARG_KW_ONLY | MP_ARG_BOOL,    {.u_bool = false} },            // TODO see if both edegs make sense in dir mode
         { MP_QSTR_idx_reset,    MP_ARG_KW_ONLY | MP_ARG_BOOL,    {.u_bool = false} },
         { MP_QSTR_swap,         MP_ARG_KW_ONLY | MP_ARG_BOOL,    {.u_bool = false} },
         { MP_QSTR_filter,       MP_ARG_KW_ONLY | MP_ARG_INT,     {.u_int = 0} },
-
+        { MP_QSTR_timeout,      MP_ARG_KW_ONLY | MP_ARG_INT,     {.u_int = 0} },              // vel messurment off
+        { MP_QSTR_vel_div,      MP_ARG_KW_ONLY | MP_ARG_INT,     {.u_int = QEI_VELDIV_1}},
     };
 
     // parse args
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
     
-    // // TODO --Check the ranges of values-- 
-    // if(args[ARG_timeout].u_int<0){
-    //     mp_raise_ValueError(MP_ERROR_TEXT("timeout can not be negative"));
-    // }
-
-
-    // --Saving the Settings--
-    self->max_pos = args[ARG_maxpos].u_bool;
-    self->both_edges = args[ARG_both_edges].u_bool;
-    // TODO Test dir mode and idx_reset
-    self->mode = args[ARG_mode].u_bool;
-    self->idx_reset=args[ARG_mode].u_bool;
-    self->swap = args[ARG_swap].u_bool;
 
     // TODO maybe add time instead of cycles
     if (args[ARG_filter].u_int == 0 || args[ARG_filter].u_int >=2 || args[ARG_filter].u_int <=17){
@@ -204,31 +207,83 @@ STATIC void qei_init_helper(machine_qei_obj_t *self, size_t n_args, const mp_obj
         mp_raise_ValueError(MP_ERROR_TEXT("Filter can only be between [2,17]"));
     }
 
+    // converts period in us into ticks and checks the range
+    uint32_t clk=SysCtlClockGet();
+
+    // TODO check Timeout==0
+    uint32_t timeout_us=args[ARG_timeout].u_int;
+    uint32_t timeout_ticks=(uint32_t) (timeout_us*(clk/1000000.0));  // timeout given in us
+    uint32_t max_timeout_us=(uint32_t) (0xFFFFFFFF)*(1000000.0/clk);
+    if(timeout_us>max_timeout_us){
+        mp_printf(MICROPY_ERROR_PRINTER, "Max timeout with current clk -> %u us\n", max_timeout_us);
+        mp_raise_ValueError(MP_ERROR_TEXT("timeout value is to big"));
+    }
+
+    // checks if vel_div parameter is in allowed range
+    int i;
+    for(i=0; args[ARG_vel_div].u_int!=allowed_vel_divs[i]; i++){
+        if( i>=sizeof(allowed_vel_divs)/sizeof(allowed_vel_divs[0])){
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid vel_div. Use QEI.VELDIVX"));
+        }
+    }
+
+    self->timeout = timeout_ticks;
+    self->vel_div = allowed_vel_divs[i];
+
+    self->max_pos = args[ARG_maxpos].u_bool;
+    self->both_phases = args[ARG_both_phases].u_bool;
+    // TODO Test dir mode and idx_reset
+    self->mode = args[ARG_mode].u_bool;
+    self->idx_reset=args[ARG_idx_reset].u_bool;     // TODO test
+    self->swap = args[ARG_swap].u_bool;
+
     // calling watchdog-Init Function 
     qei_init(self);
 }
 
 void qei_deinit(machine_qei_obj_t * self){
+    QEIDisable(self->qei_base);
+
+    // unregister in machien 
+    // unregister irq
     // Disable IRQ with mask in NVIC
     printf("Deinit\n");
     // TODO
 }
 
 
+// TODO deinint in main.c
 /* --------- Binding for Micropython ------------ */
 /* ---------------------------------------------- */
+
+STATIC mp_obj_t machine_qei_get_vel(mp_obj_t self_in){
+    machine_qei_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->timeout>0){
+        uint32_t vel_counter=QEIVelocityGet(self->qei_base);    // number of edges (ris+fal) in timer period
+        // calculate rpm from vel_counter
+        uint32_t clk=SysCtlClockGet();                          
+        uint8_t veldiv=self->vel_div>>6;
+        uint8_t edges= self->both_phases? 4 : 2;
+        float rpm;
+        rpm=(clk*pow(2,veldiv)*vel_counter*60)/(self->timeout*self->max_pos*edges);
+        return mp_obj_new_float_from_f(rpm);
+    } else {
+        mp_raise_ValueError(MP_ERROR_TEXT("Velocity capture disable, provide timeout > 0"));
+    }
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_qei_get_vel_obj, machine_qei_get_vel);
 
 STATIC mp_obj_t machine_qei_set_pos(mp_obj_t self_in,mp_obj_t pos_in){
     
     machine_qei_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint32_t pos= mp_obj_get_int(pos_in);
-    if(pos>=40){
+    if(pos>=self->max_pos){
         nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError,
         MP_ERROR_TEXT("Position needs to be smaller than (%u)"), self->max_pos));
     }
 
     QEIPositionSet(self->qei_base,pos);
-
     return mp_const_none;
 }
   
@@ -244,10 +299,10 @@ STATIC mp_obj_t machine_qei_get_pos(mp_obj_t self_in){
   
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_qei_get_pos_obj, machine_qei_get_pos);
 
-// QEI(id,max_pos,*,mode=0, both_edges=true, idx_reset=false, swap=False) TODO
+// QEI(id,max_pos,*,mode=0, both_phases=true, idx_reset=false, swap=False, vel_div=QEI_VELDIV_1, timeout=0xffff ) TODO
 STATIC mp_obj_t machine_qei_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
-    mp_arg_check_num(n_args, n_kw, 2, 6, true);
+    mp_arg_check_num(n_args, n_kw, 2, 8, true);
 
     // find QEI Port id
     uint8_t qei_idx=qei_find(args[0]);
@@ -291,10 +346,22 @@ STATIC void machine_qei_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
     // TODO
 }
 
-
+// TODO switch get set 
 STATIC const mp_rom_map_elem_t machine_qei_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_get_pos),            MP_ROM_PTR(&machine_qei_get_pos_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_pos),            MP_ROM_PTR(&machine_qei_set_pos_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_vel),            MP_ROM_PTR(&machine_qei_get_vel_obj) },
+
+    // class constants
+    // Velocity predivider
+    {MP_ROM_QSTR(MP_QSTR_VELDIV1),              MP_ROM_INT(QEI_VELDIV_1)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV2),              MP_ROM_INT(QEI_VELDIV_2)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV4),              MP_ROM_INT(QEI_VELDIV_4)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV8),              MP_ROM_INT(QEI_VELDIV_8)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV16),             MP_ROM_INT(QEI_VELDIV_16)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV32),             MP_ROM_INT(QEI_VELDIV_32)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV64),             MP_ROM_INT(QEI_VELDIV_64)},
+    {MP_ROM_QSTR(MP_QSTR_VELDIV128),            MP_ROM_INT(QEI_VELDIV_128)},
 };
 
 STATIC MP_DEFINE_CONST_DICT(machine_qei_locals_dict, machine_qei_locals_dict_table);

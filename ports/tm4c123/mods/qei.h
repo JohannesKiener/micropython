@@ -36,11 +36,13 @@ typedef struct _machine_qei_obj_t {
     uint32_t qei_base;                  // base address of quadencoder module
     uint32_t periph;                    // address needed for tivaware sysctl functions
     uint8_t qei_id;  
-    uint32_t filter;                 
+    uint32_t filter; 
+    uint32_t timeout;
+    uint32_t vel_div;                 
     bool is_enabled;
     
     bool max_pos;
-    bool both_edges;
+    bool both_phases;
     bool mode;
     bool idx_reset;
     bool swap;
