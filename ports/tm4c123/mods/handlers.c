@@ -90,6 +90,7 @@
 #include "storage.h"
 #include "can.h"
 #include "watchdog.h"
+#include "qei.h"
 // #include "dma.h"
 // #include "i2c.h"
 // #include "usb.h"
@@ -662,6 +663,14 @@ void WATCHDOG0_IRQHandler(void){
 
 void WATCHDOG1_IRQHandler(void){
     WATCHDOGGenericIntHandler(WATCHDOG1_BASE);
+}
+
+void QEI0_IRQHandler(void){
+    QEIGenericIntHandler(QEI0_BASE);
+}
+
+void QEI1_IRQHandler(void){
+    QEIGenericIntHandler(QEI1_BASE);
 }
 
 #if defined(TIM6) // STM32F401 doesn't have TIM6

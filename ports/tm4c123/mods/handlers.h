@@ -118,5 +118,8 @@ void CAN1_IRQHandler(void);
 void WATCHDOG0_IRQHandler(void);
 void WATCHDOG1_IRQHandler(void);
 
+void QEI0_IRQHandler(void);
+void QEI1_IRQHandler(void);
+
 
 #endif // MICROPY_INCLUDED_TM4C_STM32_IT_H

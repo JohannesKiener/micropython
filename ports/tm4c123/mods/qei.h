@@ -46,7 +46,7 @@ typedef struct _machine_qei_obj_t {
     bool mode;
     bool idx_reset;
     bool swap;
-    //TODO Add needed Attributes
+    mp_obj_t call_back_fun;
 
 } machine_qei_obj_t;
 
@@ -54,6 +54,6 @@ typedef struct _machine_qei_obj_t {
 extern const mp_obj_type_t machine_qei_type;
 void qei_deinit();
 
-//void WATCHDOGGenericIntHandler(uint32_t base);
+void QEIGenericIntHandler(uint32_t base);
 
 #endif // MICROPY_INCLUDED_QUADENCODER_H
