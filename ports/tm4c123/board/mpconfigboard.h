@@ -122,9 +122,9 @@
 #define MICROPY_HW_WATCHDOG1_NAME "1"
 
 #define MICROPY_HW_QEI0_NAME "0"
-#define MICROPY_HW_QEI0_IDX (pin_PD3)
-#define MICROPY_HW_QEI0_PHA (pin_PD6)
-#define MICROPY_HW_QEI0_PHB (pin_PD7)
+#define MICROPY_HW_QEI0_IDX (pin_PF4)
+#define MICROPY_HW_QEI0_PHA (pin_PF0)
+#define MICROPY_HW_QEI0_PHB (pin_PF1)
 
 #define MICROPY_HW_QEI1_NAME "1"
 #define MICROPY_HW_QEI1_IDX (pin_PC4)

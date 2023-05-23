@@ -163,12 +163,15 @@ STATIC void qei_init(machine_qei_obj_t *self){
     
         self->qei_base=QEI0_BASE;
         self->periph=SYSCTL_PERIPH_QEI0;
-        
         pins[0]=MICROPY_HW_QEI0_PHA;
+
+        //pin PD0 is locked
+        if(mp_hal_pin_needs_unlocking(pins[0])){
+            mp_hal_unlock_special_pin(pins[0]);
+        }
+
         #if defined(MICROPY_HW_QEI0_PHB)
         pins[1]=MICROPY_HW_QEI0_PHB;
-        // pin PD7 is locked
-        mp_hal_unlock_special_pin(pins[1]);
         #endif
         #if defined (MICROPY_HW_QEI0_IDX)
         pins[2]=MICROPY_HW_QEI0_IDX;

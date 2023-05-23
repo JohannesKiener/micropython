@@ -85,6 +85,7 @@
 #include "mpirq.h"
 //#include "usb_dev_msc.h"
 #include "watchdog.h"
+#include "qei.h"
 
 // prevent clash between driverlib and CMSIS
 #ifdef NVIC_BASE
@@ -633,6 +634,9 @@ soft_reset_exit:
     #endif
     #if MICROPY_PY_MACHINE_HW_WATCHDOG
     watchdog_deinit();
+    #endif
+    #if MICROPY_PY_MACHINE_HW_QEI
+    qei_deinit();
     #endif
     machine_deinit();
 
