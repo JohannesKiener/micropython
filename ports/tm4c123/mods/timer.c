@@ -171,6 +171,7 @@ STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *tim, size_t n_arg
     }
     bool is16bit = (args[1].u_int == 16);
 
+    // TODO also move to TIMERA|TIMERB init
     if (!is16bit && _mode == TIMER_CFG_A_PWM) {
         // 32-bit mode is only available when in free running modes
         goto error;
@@ -178,6 +179,7 @@ STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *tim, size_t n_arg
     // if(is16bit){
     //     tim->config = _mode;
     // }
+    // TODO move to TIMERA|TIMERB init
     tim->config = is16bit ? ((_mode | (_mode << 8)) | TIMER_CFG_SPLIT_PAIR) : _mode;
 
     // register it with the sleep module
@@ -432,14 +434,15 @@ STATIC uint32_t compute_prescaler_period_and_match_value(machine_timer_channel_o
     uint32_t maxcount = (ch->channel == (TIMER_A | TIMER_B)) ? 0xFFFFFFFF : 0xFFFF;
     uint32_t prescaler;
     uint32_t sysclk = SysCtlClockGet();
-    uint32_t period_c = (ch->frequency > 0) ? sysclk / ch->frequency : ((sysclk / 1000000) * ch->period);
+    uint32_t period_c = (ch->frequency > 0) ? sysclk / ch->frequency : ((sysclk) * ch->period);
 
     period_c = MAX(1, period_c) - 1;
     if (period_c == 0) {
         goto error;
     }
-    // //only 16 Bit now considered
- 
+    // //only 16 Bit now considered 
+    // TODO add 32 bit check maxcount == 0xFFFFFFF + ? (see datasheet)
+    
     prescaler = period_c >> 16;
     *period_out = period_c;
     if (prescaler > 0xFF && maxcount == 0xFFFF) {
@@ -567,10 +570,12 @@ STATIC mp_obj_t machine_timer_channel(size_t n_args, const mp_obj_t *pos_args, m
     if (args[0].u_int != 0 && args[1].u_int != 0) {
         goto error;
     }
+    // TODO Periods bigger than 1 needed
     // check that at least one of them has a valid value
     if (args[0].u_int <= 0 && args[1].u_int <= 0) {
         goto error;
     }
+    // TODO why only TimerA, see datasheet maybe because PWM only soported on 32 Bit, both
     // check that the polarity is not 'both' in pwm mode
     if ((tim->config & TIMER_A) == TIMER_CFG_A_PWM && args[2].u_int == (PYBTIMER_POLARITY_POS | PYBTIMER_POLARITY_NEG)) {
         goto error;
@@ -629,10 +634,10 @@ STATIC mp_obj_t machine_timer_channel_freq(size_t n_args, const mp_obj_t *args) 
         // set
         int32_t _frequency = mp_obj_get_int(args[1]);
         if (_frequency <= 0) {
-            mp_raise_ValueError(MP_ERROR_TEXT("invalid argument(s) value"));
+            mp_raise_ValueError(MP_ERROR_TEXT("invalid argument(s) value"));    //TODO see if works or maybe also add period
         }
         ch->frequency = _frequency;
-        ch->period = 1000000 / _frequency;
+        ch->period = 1 / _frequency;
         m_timer_channel_init(ch);
         return mp_const_none;
     }
