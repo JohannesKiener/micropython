@@ -35,7 +35,7 @@
 #define MICROPY_HW_MAX_UART (8)
 #define MICROPY_HW_MAX_SPI (4)
 #define MICROPY_HW_MAX_I2C (4)
-#define MICROPY_HW_MAX_TIMER (6)    // TODO TIMER see if widetimer needs more
+#define MICROPY_HW_MAX_TIMER (12)
 #define MICROPY_HW_MAX_CAN (2)
 #define MICROPY_HW_MAX_WATCHDOG (2)
 #define MICROPY_HW_MAX_QEI (2)

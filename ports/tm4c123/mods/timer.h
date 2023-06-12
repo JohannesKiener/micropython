@@ -30,104 +30,86 @@
 #include "driverlib/timer.h"
 #include "inc/hw_timer.h"
 
-
-/*
-Timer ID Enum
-*/
-// typedef enum {
-//     TIMER_0,
-//     TIMER_1,
-//     TIMER_2,
-//     TIMER_3,
-//     TIMER_4,
-//     TIMER_5,
-//     W_TIMER_0,
-//     W_TIMER_1,
-//     W_TIMER_2,
-//     W_TIMER_3,
-//     W_TIMER_4,
-//     W_TIMER_5,
-//     TIMER_NONE
-// } timer_id_t;
-
-
-/*
-Timer Mode Enum
-*/
-
-// typedef enum{
-//     ONE_SHOT,
-//     PERIODIC,
-//     RTC,
-//     IECM,           // Input Edge Count Mode
-//     IETM,           // Input Edge Time Mode
-//     PWM,            // Pulse With Modulation
-// }timer_mode_t;
-
+#include CMSIS_HEADER
 
 /**
  *  Timer register struct for easy access 
  *  for register description, see datasheet
 */
 
-// typedef struct  {
-//     volatile uint32_t CFG;
-//     volatile uint32_t TAMR;
-//     volatile uint32_t TBMR;
-//     volatile uint32_t CTL;
-//     volatile uint32_t SYNC;
-//     uint32_t _1[1];
-//     volatile uint32_t IMR;
-//     volatile uint32_t RIS;
-//     volatile uint32_t MIS;
-//     volatile uint32_t ICR;
-//     volatile uint32_t TAILR;
-//     volatile uint32_t TBILR;
-//     volatile uint32_t TAMATCHR;
-//     volatile uint32_t TBMATCHR;
-//     volatile uint32_t TAPR;
-//     volatile uint32_t TBPR;
-//     volatile uint32_t TAPMR;
-//     volatile uint32_t TBPMR;
-//     volatile uint32_t TAR;
-//     volatile uint32_t TBR;
-//     volatile uint32_t TAV;
-//     volatile uint32_t TBV;
-//     volatile uint32_t RTCPD;
-//     volatile uint32_t TAPS;
-//     volatile uint32_t TBPS;
-//     volatile uint32_t TAPV;
-//     volatile uint32_t TBPV;
-//     uint32_t _2[981]; 
-//     volatile uint32_t MPP;
-// } periph_timer_t;
+typedef struct {                                    /*!< TIMER0 Structure                                                      */
+  __IO uint32_t  CFG;                               /*!< GPTM Configuration                                                    */
+  __IO uint32_t  TAMR;                              /*!< GPTM Timer A Mode                                                     */
+  __IO uint32_t  TBMR;                              /*!< GPTM Timer B Mode                                                     */
+  __IO uint32_t  CTL;                               /*!< GPTM Control                                                          */
+  __IO uint32_t  SYNC;                              /*!< GPTM Synchronize                                                      */
+  __I  uint32_t  RESERVED;
+  __IO uint32_t  IMR;                               /*!< GPTM Interrupt Mask                                                   */
+  __IO uint32_t  RIS;                               /*!< GPTM Raw Interrupt Status                                             */
+  __IO uint32_t  MIS;                               /*!< GPTM Masked Interrupt Status                                          */
+  __O  uint32_t  ICR;                               /*!< GPTM Interrupt Clear                                                  */
+  __IO uint32_t  TAILR;                             /*!< GPTM Timer A Interval Load                                            */
+  __IO uint32_t  TBILR;                             /*!< GPTM Timer B Interval Load                                            */
+  __IO uint32_t  TAMATCHR;                          /*!< GPTM Timer A Match                                                    */
+  __IO uint32_t  TBMATCHR;                          /*!< GPTM Timer B Match                                                    */
+  __IO uint32_t  TAPR;                              /*!< GPTM Timer A Prescale                                                 */
+  __IO uint32_t  TBPR;                              /*!< GPTM Timer B Prescale                                                 */
+  __IO uint32_t  TAPMR;                             /*!< GPTM TimerA Prescale Match                                            */
+  __IO uint32_t  TBPMR;                             /*!< GPTM TimerB Prescale Match                                            */
+  __IO uint32_t  TAR;                               /*!< GPTM Timer A                                                          */
+  __IO uint32_t  TBR;                               /*!< GPTM Timer B                                                          */
+  __IO uint32_t  TAV;                               /*!< GPTM Timer A Value                                                    */
+  __IO uint32_t  TBV;                               /*!< GPTM Timer B Value                                                    */
+  __IO uint32_t  RTCPD;                             /*!< GPTM RTC Predivide                                                    */
+  __IO uint32_t  TAPS;                              /*!< GPTM Timer A Prescale Snapshot                                        */
+  __IO uint32_t  TBPS;                              /*!< GPTM Timer B Prescale Snapshot                                        */
+  __IO uint32_t  TAPV;                              /*!< GPTM Timer A Prescale Value                                           */
+  __IO uint32_t  TBPV;                              /*!< GPTM Timer B Prescale Value                                           */
+  __I  uint32_t  RESERVED1[981];
+  __IO uint32_t  PP;                                /*!< GPTM Peripheral Properties                                            */
+} periph_timer_t;
 
+typedef struct _machine_timer_obj_t machine_timer_obj_t;
+typedef struct _machine_timer_block_obj_t machine_timer_block_obj_t;
 
-// typedef struct _machine_timer_obj_t {
-//     mp_obj_base_t base;
-//     uint32_t timer_base;        // base address of timer module
-//     uint32_t periph;            // address needed for tivaware sysctl functions
-//     periph_timer_t* regs;       // register access struct pointer (usage: timer_obj.regs->DR)
-//     timer_id_t timer_id;        // Timer Id 0..5, for identification purposes
-//     uint32_t irqn;              // Interrupt request number
-//     uint8_t width;              // Timer with 16/32 or 32/64 Bit Mode
-//     uint32_t prescale;          // Timer Prescaler value
-//     uint32_t frequency;         // Frequency of Timer
-//     mp_obj_t callback;          // callback function
-// } machine_timer_obj_t;
+struct machine_timer_block_obj_t{
+    mp_obj_base_t base;
+    // Timer regs
+    uint32_t timer_base;
+    uint32_t peripheral;
+    periph_timer_t *regs;
+    
+    // timer objs in the block
+    machine_timer_obj_t *ch_A;
+    machine_timer_obj_t *ch_B;
+    
+    // Configs
+    uint8_t id;
+    bool is_wide;
+    bool is_split;
+    bool is_enabled;
+};
 
+struct machine_timer_obj_t {
+    mp_obj_base_t base;
+    machine_timer_block_obj_t *timer_block;
 
+    uint32_t channel; 
+    uint32_t mode;
+
+    uint16_t prescaler;
+    uint64_t ticks;
+    uint16_t irq_trigger;
+    uint16_t irq_flags;
+} ;
 
 
 //extern TIM_HandleTypeDef TIM5_Handle;
 
 extern const mp_obj_type_t machine_timer_type;
+extern const mp_obj_type_t machine_timer_block_type;
 // void timer_irq_handler(uint tim_id);
 void TIMERGenericIntHandler(uint32_t timer, uint16_t channel);
-/******************************************************************************
- DECLARE EXPORTED DATA
- ******************************************************************************/
-
 
 /******************************************************************************
  DECLARE PUBLIC FUNCTIONS
