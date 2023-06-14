@@ -72,7 +72,7 @@ typedef struct {                                    /*!< TIMER0 Structure       
 typedef struct _machine_timer_obj_t machine_timer_obj_t;
 typedef struct _machine_timer_block_obj_t machine_timer_block_obj_t;
 
-struct machine_timer_block_obj_t{
+typedef struct _machine_timer_block_obj_t {
     mp_obj_base_t base;
     // Timer regs
     uint32_t timer_base;
@@ -88,9 +88,9 @@ struct machine_timer_block_obj_t{
     bool is_wide;
     bool is_split;
     bool is_enabled;
-};
+} machine_timer_block_obj_t;
 
-struct machine_timer_obj_t {
+typedef struct _machine_timer_obj_t {
     mp_obj_base_t base;
     machine_timer_block_obj_t *timer_block;
 
@@ -100,20 +100,17 @@ struct machine_timer_obj_t {
     uint16_t prescaler;
     uint64_t ticks;
     uint16_t irq_trigger;
-    uint16_t irq_flags;
-} ;
-
-
-//extern TIM_HandleTypeDef TIM5_Handle;
+    bool is_enabled;
+} machine_timer_obj_t;
 
 extern const mp_obj_type_t machine_timer_type;
 extern const mp_obj_type_t machine_timer_block_type;
-// void timer_irq_handler(uint tim_id);
-void TIMERGenericIntHandler(uint32_t timer, uint16_t channel);
+
+void TIMERGenericIntHandler(uint32_t timer_idx, uint16_t channel);
 
 /******************************************************************************
  DECLARE PUBLIC FUNCTIONS
  ******************************************************************************/
-void timer_init0 (void);
+void timer_deinit_all(void);
 
 #endif // MICROPY_INCLUDED_TM4C_TIMER_H

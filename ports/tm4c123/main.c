@@ -494,7 +494,7 @@ soft_reset:
 
     dma_hw_init();
 
-    timer_init0();
+    //timer_init0();
     irq_init0();
     pwm_init0();
 
@@ -617,7 +617,7 @@ soft_reset:
             }
         }
     }
-    return 0;
+    //return 0;
 
 soft_reset_exit:
 
@@ -627,7 +627,7 @@ soft_reset_exit:
     // storage_flush();
 
     printf("PYB: soft reboot\n");
-    // TODO timer_deinit();
+    timer_deinit_all();
     uart_deinit();
     #if MICROPY_HW_ENABLE_CAN
     can_deinit();

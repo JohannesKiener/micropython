@@ -569,52 +569,115 @@ void GPIOH_Handler(void)
 
 void TIMER0AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER0_BASE, TIMER_A);
+    TIMERGenericIntHandler(0, TIMER_A);
 }
 void TIMER0BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER0_BASE, TIMER_B);
+    TIMERGenericIntHandler(0, TIMER_B);
 }
 void TIMER1AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER1_BASE, TIMER_A);
+    TIMERGenericIntHandler(1, TIMER_A);
 }
 void TIMER1BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER1_BASE, TIMER_B);
+    TIMERGenericIntHandler(1, TIMER_B);
 }
 void TIMER2AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER2_BASE, TIMER_A);
+    TIMERGenericIntHandler(2, TIMER_A);
 }
 void TIMER2BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER2_BASE, TIMER_B);
+    TIMERGenericIntHandler(2, TIMER_B);
 }
 void TIMER3AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER3_BASE, TIMER_A);
+    TIMERGenericIntHandler(3, TIMER_A);
 }
 void TIMER3BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER3_BASE, TIMER_B);
+    TIMERGenericIntHandler(3, TIMER_B);
 }
 void TIMER4AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER4_BASE, TIMER_A);
+    TIMERGenericIntHandler(4, TIMER_A);
 }
 void TIMER4BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER4_BASE, TIMER_B);
+    TIMERGenericIntHandler(4, TIMER_B);
 }
 void TIMER5AIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER5_BASE, TIMER_A);
+    TIMERGenericIntHandler(5, TIMER_A);
 }
 void TIMER5BIntHandler(void) 
 {
-    TIMERGenericIntHandler(TIMER5_BASE, TIMER_B);
+    TIMERGenericIntHandler(5, TIMER_B);
 }
+
+// Widetimer:
+void TIMER6AIntHandler(void) 
+{
+    TIMERGenericIntHandler(6, TIMER_A);
+}
+
+void TIMER6BIntHandler(void) 
+{
+    TIMERGenericIntHandler(6, TIMER_B);
+}
+
+void TIMER7AIntHandler(void) 
+{
+    TIMERGenericIntHandler(7, TIMER_A);
+}
+
+void TIMER7BIntHandler(void) 
+{
+    TIMERGenericIntHandler(7, TIMER_B);
+}
+
+void TIMER8AIntHandler(void) 
+{
+    TIMERGenericIntHandler(8, TIMER_A);
+}
+
+void TIMER8BIntHandler(void) 
+{
+    TIMERGenericIntHandler(8, TIMER_B);
+}
+
+void TIMER9AIntHandler(void) 
+{
+    TIMERGenericIntHandler(9, TIMER_A);
+}
+
+void TIMER9BIntHandler(void) 
+{
+    TIMERGenericIntHandler(9, TIMER_B);
+}
+
+void TIMER10AIntHandler(void) 
+{
+    TIMERGenericIntHandler(10, TIMER_A);
+}
+
+void TIMER10BIntHandler(void) 
+{
+    TIMERGenericIntHandler(10, TIMER_B);
+}
+
+void TIMER11AIntHandler(void) 
+{
+    TIMERGenericIntHandler(11, TIMER_A);
+}
+
+void TIMER11BIntHandler(void) 
+{
+    TIMERGenericIntHandler(11, TIMER_B);
+}
+
+
 
 void PWM0GEN0_Handler(void)
 {

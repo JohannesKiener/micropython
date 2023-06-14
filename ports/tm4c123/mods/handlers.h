@@ -102,6 +102,19 @@ void TIMER4AIntHandler(void);
 void TIMER4BIntHandler(void);
 void TIMER5AIntHandler(void);
 void TIMER5BIntHandler(void);
+// Wide timers
+void TIMER6AIntHandler(void);
+void TIMER6BIntHandler(void);
+void TIMER7AIntHandler(void);
+void TIMER7BIntHandler(void);
+void TIMER8AIntHandler(void);
+void TIMER8BIntHandler(void);
+void TIMER9AIntHandler(void);
+void TIMER9BIntHandler(void);
+void TIMER10AIntHandler(void);
+void TIMER10BIntHandler(void);
+void TIMER11AIntHandler(void);
+void TIMER11BIntHandler(void);
 
 void PWM0GEN0_Handler(void);
 void PWM0GEN1_Handler(void);
