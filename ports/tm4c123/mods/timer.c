@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "py/runtime.h"
 #include "py/gc.h"
@@ -49,32 +50,32 @@
 /// Timers can be used for a great variety of tasks.  At the moment, only
 /// the simplest case is implemented: that of calling a function periodically.
 ///
-/// Each timer consists of a counter that counts up at a certain rate.  The rate
-/// at which it counts is the peripheral clock frequency (in Hz) divided by the
-/// timer prescaler.  When the counter reaches the timer period it triggers an
+/// Each timer consists of a counter that counts up/down at a certain rate.  The rate
+/// at which it counts is the peripheral clock frequency (in Hz).  
+/// When the counter reaches the timer period/ zero it triggers an
 /// event, and the counter resets back to zero.  By using the callback method,
 /// the timer event can call a Python function.
 ///
 /// Example usage to toggle an LED at a fixed frequency:
+///     from umachine import Timer
+///     tim=Timer(Timer.TIMER0,Timer.A,freq=1)      # create Timer obj and start timer with 1 Hz
+/// 
+/// Add a callback:
+///     def callback_fun(self):
+///         print("timeout")
+///         #...
 ///
-///     tim = pyb.Timer(4)              # create a timer object using timer 4
-///     tim.init(freq=2)                # trigger at 2Hz
-///     tim.callback(lambda t:pyb.LED(1).toggle())
+///     tim.irq(callback=callback_fun)              # activate timeout irq + register callback 
 ///
 /// Further examples:
-///
-///     tim = pyb.Timer(4, freq=100)    # freq in Hz
-///     tim = pyb.Timer(4, prescaler=0, period=99)
-///     tim.counter()                   # get counter (can also set)
+///     # Configure timer with exact register values
+///     tim=Timer(Timer.TIMER0,Timer.A,ticks=100,prescaler=10)
+///     tim.ticks()                     # get current value of timer reg
+///     tim.ticks(200)                  # set reload value of timer reg
+///     tim.frequency(2)                # set freq to 2 Hz (can also get)
 ///     tim.prescaler(2)                # set prescaler (can also get)
-///     tim.period(199)                 # set period (can also get)
-///     tim.callback(lambda t: ...)     # set callback for update interrupt (t=tim instance)
 ///     tim.callback(None)              # clear callback
 ///
-
-// The timers can be used by multiple drivers, and need a common point for
-// the interrupts to be dispatched, so they are all collected here.
-//
 
 /******************************************************************************
  DECLARE PRIVATE CONSTANTS
@@ -86,26 +87,21 @@
 // supported irq sources
 #define MP_IRQ_TIMEOUT                                  (TIMER_TIMA_TIMEOUT | TIMER_TIMB_TIMEOUT)
 
-/******************************************************************************
- DEFINE PRIVATE TYPES
- ******************************************************************************/
-
-
-/*******************************************************************************
- *
- Create Timer 
- *****************************************************************************/
 STATIC const mp_irq_methods_t machine_timer_irq_methods;
+
+// Array with the Base addresses of the different timers
 STATIC uint32_t timer_block_bases[MICROPY_HW_MAX_TIMER] = { TIMER0_BASE,TIMER1_BASE,TIMER2_BASE,
                                                             TIMER3_BASE,TIMER4_BASE,TIMER5_BASE,
                                                             WTIMER0_BASE,WTIMER1_BASE,WTIMER2_BASE,
                                                             WTIMER3_BASE,WTIMER4_BASE,WTIMER5_BASE};
 
+// Array with the peripheral addresses of the different timers
 STATIC uint32_t timer_block_sysctl[MICROPY_HW_MAX_TIMER] = {SYSCTL_PERIPH_TIMER0,SYSCTL_PERIPH_TIMER1,SYSCTL_PERIPH_TIMER2,
                                                             SYSCTL_PERIPH_TIMER3,SYSCTL_PERIPH_TIMER4,SYSCTL_PERIPH_TIMER5,
                                                             SYSCTL_PERIPH_WTIMER0,SYSCTL_PERIPH_WTIMER1,SYSCTL_PERIPH_WTIMER2,
                                                             SYSCTL_PERIPH_WTIMER3,SYSCTL_PERIPH_WTIMER4,SYSCTL_PERIPH_WTIMER5};
 
+// Map of the given irq handlers 
 STATIC const void* timer_irq_handles[2][MICROPY_HW_MAX_TIMER] = {{  &TIMER0AIntHandler,&TIMER1AIntHandler,&TIMER2AIntHandler,
                                                                     &TIMER3AIntHandler,&TIMER4AIntHandler,&TIMER5AIntHandler,
                                                                     &TIMER6AIntHandler,&TIMER7AIntHandler,&TIMER8AIntHandler,
@@ -115,39 +111,73 @@ STATIC const void* timer_irq_handles[2][MICROPY_HW_MAX_TIMER] = {{  &TIMER0AIntH
                                                                     &TIMER6BIntHandler,&TIMER7BIntHandler,&TIMER8BIntHandler,
                                                                     &TIMER9BIntHandler,&TIMER10BIntHandler,&TIMER11BIntHandler}};
 
-
-// returns the right mask for the Load Reg of the referenced Timer
-// can also be used as the max value of the timer load register
-STATIC uint64_t get_timer_mask(machine_timer_obj_t * self){
+// returns the max number of bits in the counting reg of a given timer obj
+STATIC uint8_t get_timer_bits(machine_timer_obj_t * self){
     if (!self->timer_block->is_wide && self->timer_block->is_split){
-        // 16 Bit
-        return 0x000000000000ffff;
+        return 16;
     } else if (self->timer_block->is_wide && !self->timer_block->is_split){
-        // 64 Bit
-        return 0xffffffffffffffff;
+        return 64;
     } else {
-        // 32 Bit
-        return 0x00000000ffffffff;
+        return 32;
     }
 }
 
-// returns the right mask for the prescaler Reg of the referenced Timer
-// can also be used as the max value of the prescaler register
-STATIC uint16_t get_prescaler_mask(machine_timer_obj_t * self){
+// returns the max number of prescaler bits of a given timer obj
+STATIC uint8_t get_prescaler_bits(machine_timer_obj_t * self){
     if (self->timer_block->is_wide && self->timer_block->is_split){
         // 32 bit wide Timer -> 16 Bit  prescalers
-        return 0xffff;
+        return 16;
     } else if (!self->timer_block->is_wide && self->timer_block->is_split){
         // 16 bit Timer -> 8 Bit  prescaler
-        return 0x00ff;
+        return 8;
     } else {
         // TIMERA|TIMERB -> no prescaler, see datasheet
-        return 0x0000;
+        return 0;
     }
 }
 
+// Returns the bitmask from a given length (<bit>).
+// This mask also represents the max value that can be represented with a given number of bits.
+// So this function can be used for max value overflow checks.
+STATIC uint64_t bitmask(uint16_t bit){
+    return (((uint64_t)1<<bit)-1);
+}
+
+STATIC void set_prescaler(machine_timer_obj_t * self, uint16_t prescaler){
+    if(prescaler > bitmask(get_prescaler_bits(self))){
+        mp_raise_ValueError(MP_ERROR_TEXT("Given <prescaler> invalid"));
+    }
+    self->prescaler=prescaler;
+}
+
+STATIC uint64_t get_current_ticks(machine_timer_obj_t * self){
+    uint64_t value;
+    if(self->timer_block->is_wide && !self->timer_block->is_split){
+        // wide + concatenated needs special reg call
+        value=TimerValueGet64(self->timer_block->timer_base);
+    }else{
+        value=TimerValueGet(self->timer_block->timer_base,self->channel);
+    }
+    return value;
+}
+
+STATIC void set_ticks(machine_timer_obj_t * self, uint64_t ticks){
+    if(ticks > bitmask(get_timer_bits(self))){
+        mp_raise_ValueError(MP_ERROR_TEXT("Given <ticks> invalid"));
+    }
+    self->ticks=ticks;
+}
+
+STATIC float get_freq(machine_timer_obj_t * self){
+    uint32_t clk=SysCtlClockGet();
+    return (float)clk/((self->ticks+1)*(self->prescaler+1));
+}
+
+// checks the ranges and calculates the ticks und the prescaler from a given frequency
 // be careful with other modes than oneshot/periodic down, here prescaler not low but high bits
-STATIC void calculate_prescaler_from_ticks_down(machine_timer_obj_t * self, float ticks){
+STATIC void set_prescaler_ticks_from_freq_down(machine_timer_obj_t * self, mp_obj_t freq){
+    uint32_t clk=SysCtlClockGet();
+    float ticks = (float)clk/mp_obj_get_float_to_f(freq);
     uint32_t prescaler=1;
     uint64_t ticks_int;
 
@@ -165,7 +195,7 @@ STATIC void calculate_prescaler_from_ticks_down(machine_timer_obj_t * self, floa
     ticks_int=(uint64_t)ticks;
 
     //try to use prescaler to avoid the overflow
-    while (ticks_int > get_timer_mask(self)) {
+    while (ticks_int > bitmask(get_timer_bits(self))) {
     // Disassembles the ticks factorially, while trying to minimize the error
         // if we can divide exactly, do that first
         if (ticks_int % 5 == 0) {
@@ -185,7 +215,7 @@ STATIC void calculate_prescaler_from_ticks_down(machine_timer_obj_t * self, floa
             }
         }
         // check for prescaler overflow
-        if (prescaler>get_prescaler_mask(self)){
+        if (prescaler>bitmask(get_prescaler_bits(self))){
             //overflow error
             if(!self->timer_block->is_wide){
                 printf("Hint: Consider using Wide-Timers\n");
@@ -197,9 +227,10 @@ STATIC void calculate_prescaler_from_ticks_down(machine_timer_obj_t * self, floa
         }   
     }
 
-    self->ticks=(ticks_int - 1)&get_timer_mask(self);
-    self->prescaler=(prescaler - 1)&get_prescaler_mask(self);
+    self->ticks=(ticks_int - 1)&bitmask(get_timer_bits(self));
+    self->prescaler=(prescaler - 1)&bitmask(get_prescaler_bits(self));
 }
+
 // -------- IRQ Functions -----------------
 
 STATIC void machine_timer_irq_enable (mp_obj_t self_in) {
@@ -219,6 +250,7 @@ STATIC int machine_timer_irq_flags (mp_obj_t self_in) {
     return self->irq_trigger;
 }
 
+// (De)Actives irqs 
 STATIC void update_timer_irq(machine_timer_obj_t *self, mp_obj_t callback, uint32_t trigger){
     // check if trigger is valid
     if(trigger!=MP_IRQ_TIMEOUT){
@@ -250,6 +282,7 @@ STATIC void update_timer_irq(machine_timer_obj_t *self, mp_obj_t callback, uint3
     }
 }
 
+// irq Handler
 void TIMERGenericIntHandler(uint32_t timer_idx, uint16_t channel) {
     machine_timer_obj_t *self;
     uint32_t status;
@@ -267,7 +300,7 @@ void TIMERGenericIntHandler(uint32_t timer_idx, uint16_t channel) {
 
 // -------- Init/Deint-Functions ---------- 
 
-//del timer_block obj if both timers are unused
+// deinits the timerblock if no other timer within the block is still used
 STATIC void timer_block_deinit(machine_timer_block_obj_t *self){
     if(self!=mp_const_none){
         if(!self->ch_A->is_enabled && !self->ch_B->is_enabled){
@@ -277,17 +310,18 @@ STATIC void timer_block_deinit(machine_timer_block_obj_t *self){
     }
 }
 
-// del timer obj if it is allocated, also disalbes irqs ant the timer itself
+// deinits a single timer obj. Also disables irqs
 STATIC void timer_deinit(machine_timer_obj_t *self){
     // only deinit if timer is allocated
     if(self!=mp_const_none){
         TimerDisable(self->timer_block->timer_base, self->channel);
         machine_timer_irq_disable(self);
-        // del timer instance from timer_block
         self->is_enabled=false;
     }
 }
 
+// deinits all the timers and timer_blocks that are active
+// this also disables irqs
 void timer_deinit_all(){
     for (int i = 0; i < MP_ARRAY_SIZE(MP_STATE_PORT(machine_timer_block_obj_all)); i++) {
         machine_timer_block_obj_t *timer_block = MP_STATE_PORT(machine_timer_block_obj_all)[i];
@@ -299,7 +333,7 @@ void timer_deinit_all(){
     }
 }
 
-
+// init struct, when newly allocating a timer obj
 STATIC void timer_struct_init0(machine_timer_obj_t *self){
     self->base.type=&machine_timer_type;
     self->timer_block=mp_const_none;
@@ -311,6 +345,7 @@ STATIC void timer_struct_init0(machine_timer_obj_t *self){
     self->is_enabled=false;
 }
 
+// init struct, when newly allocating a timer_block obj
 STATIC void timer_block_struct_init0(machine_timer_block_obj_t *self){
     self->base.type=&machine_timer_block_type;
     self->timer_base=0;
@@ -324,7 +359,7 @@ STATIC void timer_block_struct_init0(machine_timer_block_obj_t *self){
     self->is_enabled=false;
 }
 
-// configures the peripheral regs 
+// configures the peripheral regs and starts the timer 
 STATIC void timer_configure (machine_timer_obj_t *self) {
     SysCtlPeripheralEnable(self->timer_block->peripheral);
     while(!SysCtlPeripheralReady(self->timer_block->peripheral));
@@ -362,6 +397,7 @@ STATIC void timer_configure (machine_timer_obj_t *self) {
     TimerEnable(self->timer_block->timer_base, self->channel);
 }
 
+// Configures a given timer obj, checks all the user inputs and inits the timer obj
 STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_mode, ARG_freq , ARG_prescaler, ARG_ticks};
     static const mp_arg_t allowed_args[] = {
@@ -375,42 +411,33 @@ STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *self, size_t n_ar
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    // check the mode
+    // ---check the mode
     uint32_t mode = args[ARG_mode].u_int;
     if (mode != TIMER_CFG_ONE_SHOT && mode != TIMER_CFG_PERIODIC){
         mp_raise_ValueError(MP_ERROR_TEXT("Invalid mode"));
     }
 
-    // Timing settings
-    uint32_t clk=SysCtlClockGet();
+    // ---Timing settings
     // freq given
     if (args[ARG_freq].u_obj != MP_OBJ_NULL) {
-        float freq = mp_obj_get_float_to_f(args[ARG_freq].u_obj);
-        calculate_prescaler_from_ticks_down(self,(float)clk/freq);
-
+        set_prescaler_ticks_from_freq_down(self,args[ARG_freq].u_obj);
     // exact register values are given
     }else if(args[ARG_ticks].u_int != 0){
-        uint64_t ticks=args[ARG_ticks].u_int;
-        uint16_t prescaler=args[ARG_prescaler].u_int;
-        if(prescaler > get_prescaler_mask(self)){
-            mp_raise_ValueError(MP_ERROR_TEXT("Given <prescaler> invalid"));
-        }
-        if(ticks > get_timer_mask(self)){
-            mp_raise_ValueError(MP_ERROR_TEXT("Given <ticks> invalid"));
-        }
-        self->ticks=ticks;
-        self->prescaler=prescaler;
+        set_ticks(self,args[ARG_ticks].u_int);
+        set_prescaler(self,args[ARG_prescaler].u_int);
     }else{
         //none or both are given
         mp_raise_ValueError(MP_ERROR_TEXT("Specify <freq> or <ticks> + <prescaler>"));
     }
 
+    // set mode
     self->mode=mode;
-    timer_init(self);
+    timer_configure(self);
     return mp_const_none;
 }
 
-
+// Inits a given timer_block obj, with a given channel.
+// Also creates right timer within the timer_block and returns it.
 STATIC machine_timer_obj_t * machine_timer_block_init_helper(machine_timer_block_obj_t *self, uint32_t channel) {
     // check channel
     if (channel != TIMER_A && channel !=TIMER_B && channel != (TIMER_A|TIMER_B)){
@@ -454,7 +481,7 @@ STATIC machine_timer_obj_t * machine_timer_block_init_helper(machine_timer_block
         timer_deinit(timer);
     }
     
-    // save new timer obj to timer_block
+    // save reafeerence of new timer obj to timer_block obj
     if(channel==TIMER_B){
         self->ch_B=timer;
     }else{
@@ -466,6 +493,59 @@ STATIC machine_timer_obj_t * machine_timer_block_init_helper(machine_timer_block
 
 // -------------Micropython bindings---------------------
 
+/// \method prescaler(*,prescaler)
+/// @brief Gets/Sets the value of the timer prescaler register.
+/// @param prescaler when provided, sets the exact prescaler value of the timer 
+/// @return reload value of prescaler
+STATIC mp_obj_t machine_timer_prescaler(size_t n_args, const mp_obj_t* args){
+    machine_timer_obj_t *self=args[0];
+    if(n_args>1){
+        set_prescaler(self,mp_obj_get_int(args[1]));
+        timer_configure(self);
+    }
+    return mp_obj_new_int(self->prescaler);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_timer_prescaler_obj,1,2,machine_timer_prescaler);
+
+/// \method ticks(*,ticks)
+/// @brief Sets the value of the timer reload register. Gets the current value of the timer register.
+/// @param ticks when provided sets the exact ticks value of the timer 
+/// @return current ticks of the timer obj
+/// @note Get and set do not use the same timer registers. While setting only changes the relaod value of the timer obj
+/// and thus the period, getting returns the current value of the timer. 
+STATIC mp_obj_t machine_timer_ticks(size_t n_args, const mp_obj_t* args){
+    machine_timer_obj_t *self=args[0];
+    if(n_args>1){
+        set_ticks(self,mp_obj_get_int(args[1]));
+        timer_configure(self);
+    }
+    return mp_obj_new_int_from_ull(get_current_ticks(self));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_timer_ticks_obj,1,2,machine_timer_ticks);
+
+/// \method frequency(*,freq)
+/// @brief Gets/sets the frequency of a timer obj.
+/// @param freq when provided sets the timer to the specified frequency
+/// @return current freqency of the timer obj
+STATIC mp_obj_t machine_timer_frequency(size_t n_args, const mp_obj_t* args){
+    machine_timer_obj_t *self=args[0];
+    //set
+    if(n_args>1){
+        if (mp_obj_is_float(args[1])||mp_obj_is_int(args[1])){
+            set_prescaler_ticks_from_freq_down(self,args[1]);
+            timer_configure(self);
+        }
+    }
+    //get
+    return mp_obj_new_float(get_freq(self));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_timer_frequency_obj, 1, 2, machine_timer_frequency);
+
+/// \method irq(*,callback=MP_OBJ_NULL,trigger=MP_IRQ_TIMEROUT)
+/// \brief (de)activates the timer irq of a timer obj and attaches a callback function to it.
+/// \param callback is the callback function that gets called upon an interrupt.
+/// When only calling callback() a previously actived irq gets cleared.
+/// \param trigger is the IRQ type that is activated
 STATIC mp_obj_t machine_timer_irq(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_callback, ARG_trigger};
     static const mp_arg_t allowed_args[] = {
@@ -483,6 +563,10 @@ STATIC mp_obj_t machine_timer_irq(size_t n_args, const mp_obj_t *pos_args, mp_ma
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_timer_irq_obj, 1, machine_timer_irq);
 
+/// @method deinit()
+/// @brief Deinitialises the Timer object. Also deinitialises the whole TimerBlock, if no other timer in the 
+/// block is active.
+/// @return None
 STATIC mp_obj_t machine_timer_deinit(mp_obj_t self){
     machine_timer_obj_t *timer=MP_OBJ_TO_PTR(self);
     machine_timer_block_obj_t *timer_block=timer->timer_block;
@@ -496,6 +580,20 @@ STATIC mp_obj_t machine_timer_deinit(mp_obj_t self){
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_timer_deinit_obj, machine_timer_deinit);
 
+
+/// @classmethod @constructor(TimerBlockID,timer,*,mode=PERIODC,freq=MP_OBJ_NULL,ticks=0,prescaler=0)
+/// @brief Creates a Timer object in the given TimerBlock and with the given Timer. 
+/// To configure the timing only <freq> can be used or for more precise configurations <ticks> + <prescaler> can be used.
+/// @param TimerBlockID is the ID of the Normal or Wide-Timerblock. See:
+/// \b TIMER0, \b TIMER1, \b TIMER2, \b TIMER3, \b TIMER4, \b TIMER5
+/// , \b WTIMER0, \b WTIMER1, \b WTIMER2, \b WTIMER3, \b WTIMER4, \b WTIMER5,
+/// @param timer specifies which timer to use within the TimerBlock. Can be one of the following:
+/// \b A , \b B , \b A|B (concatenated) 
+/// @param mode specifies the timer mode: \b ONE_SHOT , \b PERIODC
+/// @param freq specifies the frequency of the timer.
+/// @param ticks specifies the exact reload value of the timer reg
+/// @param prescaler specifies the exact prescaler of the timer reg  
+/// @return Timer object
 STATIC mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
     mp_arg_check_num(n_args, n_kw, 2, MP_OBJ_FUN_ARGS_MAX, true);
@@ -536,7 +634,40 @@ STATIC mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args,
     return (mp_obj_t)self;
 }
 
+/// \method __str__()
+/// \brief Return a string describing the Timer object
+STATIC void machine_timer_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    machine_timer_obj_t *self=MP_OBJ_TO_PTR(self_in);
+
+    // strings for displaying what timer is used and if its concatenated
+    vstr_t vstr[3];
+    uint8_t vstr_idx;
+    vstr_init_len(&vstr[0], 6);
+    memcpy(vstr[0].buf,"TimerA",7);
+    vstr_init_len(&vstr[1], 6);
+    memcpy(vstr[1].buf,"TimerB",7);
+    vstr_init_len(&vstr[2], 13);
+    memcpy(vstr[2].buf,"TimerA|TimerB",14);
+    if(self->channel==0x00ff){
+        vstr_idx=0;
+    }else if(self->channel==0xff00){
+        vstr_idx=1;
+    }else{
+        //self->channel==0xffff
+        vstr_idx=2;
+    }
+    printf("<Timer Object>\n");
+    printf("TimerBlock ID: %u, '%s'\n",self->timer_block->id,vstr[vstr_idx].buf);
+    printf("max bitlengths: timer(%u) | prescaler(%u)\n",get_timer_bits(self),get_prescaler_bits(self));
+    // TODO comment obj print + comment why no +1
+    printf("reload values: ticks("); mp_obj_print(mp_obj_new_int_from_ull(self->ticks), PRINT_STR); printf(") | prescaler(%u)",self->prescaler);
+}  
+
+
 STATIC const mp_rom_map_elem_t machine_timer_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_prescaler),              MP_ROM_PTR(&machine_timer_prescaler_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks),                  MP_ROM_PTR(&machine_timer_ticks_obj) },
+    { MP_ROM_QSTR(MP_QSTR_frequency),              MP_ROM_PTR(&machine_timer_frequency_obj) },
     { MP_ROM_QSTR(MP_QSTR_irq),                    MP_ROM_PTR(&machine_timer_irq_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit),                 MP_ROM_PTR(&machine_timer_deinit_obj) },
 
@@ -565,7 +696,7 @@ STATIC MP_DEFINE_CONST_DICT(machine_timer_locals_dict, machine_timer_locals_dict
 const mp_obj_type_t machine_timer_type = {
     { &mp_type_type },
     .name = MP_QSTR_Timer,
-    // .print = machine_timer_print,
+    .print = machine_timer_print,
     .make_new = machine_timer_make_new,
     .locals_dict = (mp_obj_t)&machine_timer_locals_dict,
 };
