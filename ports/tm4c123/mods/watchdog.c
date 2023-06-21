@@ -207,11 +207,7 @@ STATIC void watchdog_init_helper(machine_watchdog_obj_t *self_in, size_t n_args,
     } else if(self->wdt_id==WDT1){
         self->watchdog_base=WATCHDOG1_BASE;
         self->periph=SYSCTL_PERIPH_WDOG1;
-        
-        // TODO maybe remove
-        // long int reg=HWREG(SYSCTL_BASE+0x154);
-        // clk=reg & 0x0000007F;
-        // printf("%lu",clk);
+    
         clk=16000000;       // PISCO 16 Mhz clk      
     } else{
         mp_raise_ValueError(MP_ERROR_TEXT("Watchdogtimer does not exist"));
@@ -244,6 +240,9 @@ void watchdog_deinit(machine_watchdog_obj_t * self){
 
 /* --------- Binding for Micropython ------------ */
 /* ---------------------------------------------- */
+/// \method feed()
+/// \brief feeds the watchdog timer
+/// \return None
 STATIC mp_obj_t machine_watchdog_feed(mp_obj_t self_in){
     machine_watchdog_obj_t *self = MP_OBJ_TO_PTR(self_in);
     reset_watchdog(self);
@@ -251,9 +250,12 @@ STATIC mp_obj_t machine_watchdog_feed(mp_obj_t self_in){
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_watchdog_feed_obj,machine_watchdog_feed);
 
-//TODO see what happens on reconfiguring 
-
-// WDT(id,*,timeout)
+/// \classmethod @constructor WDT(id,*,timeout=5000,handler=None)
+/// \brief Creates a WatchdogTimer Objekt
+/// \param id ID of the Wachtdog timer [0,1]
+/// \param timeout period in us of the watchdog timer
+/// \param handler micropython callback function, that gets called when the WDT timer reaches 0
+/// \return None
 STATIC mp_obj_t machine_watchdog_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
     mp_arg_check_num(n_args, n_kw, 1, 2, true);

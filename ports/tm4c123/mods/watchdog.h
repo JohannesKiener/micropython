@@ -39,8 +39,6 @@ typedef struct _machine_watchdog_obj_t {
     uint32_t wdt_id;
     bool is_enabled;
     uint32_t timeout;
-    // TODO WDOG: add Attributes 
-
     mp_obj_t call_back_fun;             // Callbackfuntion for time = 0
 
 } machine_watchdog_obj_t;
