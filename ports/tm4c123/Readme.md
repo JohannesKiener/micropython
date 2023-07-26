@@ -247,31 +247,29 @@ If *protocol* is given, *phase* and *polarity* will be **ignored**!
 See also: 
 <https://docs.micropython.org/en/latest/library/machine.Timer.html>
 
-    machine.Timer(id, mode, width)
+    Timer(TimerBlockID,Timer,*,mode=PERODIC,freq=None,ticks=0,prescaler=0)
 
-| Parameter | Function                                         | value range                                  | default |
-| --------: | :----------------------------------------------- | :-------------------------------------------- | :----------- |
-|        id | Timer ID as Number | \[0..5\]                             | \-           |
-|      mode | Timer mode                                        | Timer.PERIODIC, Timer.ONE_SHOT, Timer.PWM                 | \-           |
-|      width | Timer width                                | 16 or 32 bit  | 16 |
+| Parameter | Function                                         | value range                                     | default       |
+| --------: | :----------------------------------------------- | :--------------------------------------------   | :-----------  |
+| TimerBlockID | Timerblock id as number                      | \[0..5\] normal, \[6..11] wide                   | \-           |
+| Timer     | Timer in timerblock                             | Timer.A,Timer.B, Timer.A\|Timer.B (concatenated) | \-           |
+|      mode | Timer mode                                       | Timer.PERIODIC, Timer.ONE_SHOT                   | Timer.PERIODIC|
+|      freq | Timer frequency                                  | [int],[float]*                                   | None   |
+| ticks     | Exact value in RELOAD reg                       | [int]*                                          | 0 |
+| prescaler | Exact value in PRESCALER reg                    | [int]*                                           | 0 |
 
-Additionally, a Timer channel has to be initialized:
-
-
-    Timer.channel(channel id, freq, period, polarity, duty_cycle)
-
-| Parameter | Function                                         | value range                                  | default |
-| --------: | :----------------------------------------------- | :-------------------------------------------- | :----------- |
-|    channel id | Channel ID as Constant|Timer.A, Timer.B, Timer.A &#124; Timer.B                           | \-           |
-|    freq | Frequency \[Hz\]    | depends on sys clk and timer width    | 0          |
-|    period | Period \[sec\]     | depends on sys clk and timer width    | 0   |
-|    polarity   | Timer polarity   | Timer.POSITIVE, Timer.NEGATIVE  | TIMER.POSITIVE |
-|    duty_cycle | Duty Cycle for PWM                              | \[0..10000\]  | \-|
-
+*actual values depend on the timer used, but there are precise error texts, telling the user when the input is out of range.
 
 A callback function for the timeout interrupt is added by calling the .irq() method:
 
-    channel.irq(trigger=Timer.TIMEOUT, handler=lambda h: callbackFunc())
+    Timer.irq(*,trigger=Timer.IRQ_TIMEOUT, handler=None)
+There are also get/set methods:
+```
+   Timer.frequency(*,freq)
+   Timer.ticks(*,ticks)
+   Timer.prescaler(*,prescaler)
+```
+
 
 ---
 ### PWM
