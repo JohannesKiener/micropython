@@ -244,9 +244,6 @@ If *protocol* is given, *phase* and *polarity* will be **ignored**!
 ---
 ### Timer
 
-See also: 
-<https://docs.micropython.org/en/latest/library/machine.Timer.html>
-
     Timer(TimerBlockID,Timer,*,mode=PERODIC,freq=None,ticks=0,prescaler=0)
 
 | Parameter | Function                                         | value range                                     | default       |
@@ -263,6 +260,14 @@ See also:
 A callback function for the timeout interrupt is added by calling the .irq() method:
 
     Timer.irq(*,trigger=Timer.IRQ_TIMEOUT, handler=None)
+If `handler=None` the irq is deactivated.
+`handler` needs to be a micropython function with one argument to activate the interrupt.Eg:
+```
+def callback(self):
+    print("callback")
+
+``` 
+
 There are also get/set methods:
 ```
    Timer.frequency(*,freq)
@@ -459,4 +464,60 @@ There are also get/set methods:
 
 </details>  
   
+### Watchdog Timer
 
+```
+machine.WDT(ID,*,timeout=5000,handler=None)
+```
+| Parameter | Function                                         | value range                                     | default       |
+| --------: | :----------------------------------------------- | :--------------------------------------------   | :-----------  |
+|ID         |	ID of WDT 	                                    |\[0,1\]                                          |	\-           |
+|timeout	   | Periode in us	                                 | [int]	                                         | 5000           |
+|handler	   | Callback handler                                 | 	function with one parameter                    |	None         | 
+
+When the WDT reaches 0 and *handler=None* the board is reset. 
+When the WDT reaches 0 and *handler* is a valid micropython function with one parameter, it gets executed instead of a reset. 
+
+```
+WDT.feed()   // resets the WDT
+```
+
+### Quadratur Encoder
+
+```
+machine.QEI(id,max_pos,*,clk_dir=False, both_phases=True, idx_reset=False, swap=False, filter=0, timeout=0)
+```
+| Parameter | Function                                         | value range                                     | default       |
+| --------: | :----------------------------------------------- | :--------------------------------------------   | :-----------  |
+|id	      |ID of the QEI                                     |	[0,1]	                                         |               -|
+|max_pos	   | Number of positions of the Quadartur Encoder	   |  [int]	                                         |-               |
+|clk_dir	   |Clock direction mode	                           |  [bool]	                                      |False           |
+|both_phases|Use both phases                                   |  [bool]	                                      |False           |
+|idx_reset	|Resets to postion on an index plus	               |  [bool]	                                      |False           |
+|swap	      |swaps phases A and B	                           |  [bool]	                                      |False           |
+|filter	   |Filter for debouncig	                           |  [0]\(off\) or [2,17](clk cycles to wait)	     |0               |
+|timeout	   |Periode in us of the velocity timer	            |  [int]	                                         |0               |
+
+An interrupt can be added with the .irq() function:
+```
+QEI.irq(source, callback)
+```
+`source` can be one of the following:
+- QEI.INT_INDEX (index puls is received)
+- QEI.INT_TIMER (velocity timer reaches 0)
+- QEI.INT_DIR (Change of the spin direction)
+- QEI.INT_ERROR (error detected)
+
+`callback` has to be a micropython function with one parameter. Example:
+```
+def callback(self):
+    print(self.get_pos())
+```
+
+Other Methods:
+```
+QEI.get_pos()      // Get current postion
+QEI.set_pos()      // Sets current postion
+QEI.get_vel()      // Get velocity in rpm
+
+```
