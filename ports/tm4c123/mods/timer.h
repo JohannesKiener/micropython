@@ -72,35 +72,38 @@ typedef struct {                                    /*!< TIMER0 Structure       
 typedef struct _machine_timer_obj_t machine_timer_obj_t;
 typedef struct _machine_timer_block_obj_t machine_timer_block_obj_t;
 
+// Struck for a timer block, that contains two timers (A and B)
 typedef struct _machine_timer_block_obj_t {
-    mp_obj_base_t base;
+    mp_obj_base_t base;                   // micropython obj base
     // Timer regs
-    uint32_t timer_base;
-    uint32_t peripheral;
-    periph_timer_t *regs;
+    uint32_t timer_base;                  // base Adress of the Timer Block
+    uint32_t peripheral;                  // address of the peripheral, needed for sysctl
+    periph_timer_t *regs;                 // struct for easier reg access
     
     // timer objs in the block
-    machine_timer_obj_t *ch_A;
-    machine_timer_obj_t *ch_B;
-    
+    machine_timer_obj_t *ch_A;            // pointer to timer A (also used if timers a concatenated)
+    machine_timer_obj_t *ch_B;            // pointer to timer B (not used when concatenated)
+
     // Configs
-    uint8_t id;
-    bool is_wide;
-    bool is_split;
+    uint8_t id;                           // id: 0-5 normal timers, 6-11 wide timers
+    bool is_wide;                         
+    bool is_split;                        
     bool is_enabled;
 } machine_timer_block_obj_t;
 
+// Struck for a Timer (Can either be A or B)
 typedef struct _machine_timer_obj_t {
-    mp_obj_base_t base;
-    machine_timer_block_obj_t *timer_block;
+    mp_obj_base_t base;                       // micropython obj base
+    machine_timer_block_obj_t *timer_block;   // pointer to parent timer_block
 
-    uint32_t channel; 
-    uint32_t mode;
-
-    uint16_t prescaler;
-    uint64_t ticks;
-    uint16_t irq_trigger;
-    bool is_enabled;
+    uint32_t channel;                         // mask: A=0x00ff, B=0xff00, A|B concat 0xffff
+                                              // Mask used for regs that are shared by Timer A and B
+    uint32_t mode;                            // PERIODIC or ONESHOT
+  
+    uint16_t prescaler;                       // Value of prescalere reg
+    uint64_t ticks;                           // Value of timer intervall load reg
+    uint16_t irq_trigger;                     // irq trigger source
+    bool is_enabled;                          // timer is running
 } machine_timer_obj_t;
 
 extern const mp_obj_type_t machine_timer_type;

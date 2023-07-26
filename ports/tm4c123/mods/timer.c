@@ -659,7 +659,6 @@ STATIC void machine_timer_print(const mp_print_t *print, mp_obj_t self_in, mp_pr
     printf("<Timer Object>\n");
     printf("TimerBlock ID: %u, '%s'\n",self->timer_block->id,vstr[vstr_idx].buf);
     printf("max bitlengths: timer(%u) | prescaler(%u)\n",get_timer_bits(self),get_prescaler_bits(self));
-    // TODO comment obj print + comment why no +1
     printf("reload values: ticks("); mp_obj_print(mp_obj_new_int_from_ull(self->ticks), PRINT_STR); printf(") | prescaler(%u)",self->prescaler);
 }  
 
@@ -692,13 +691,13 @@ STATIC const mp_rom_map_elem_t machine_timer_locals_dict_table[] = {
     };
 STATIC MP_DEFINE_CONST_DICT(machine_timer_locals_dict, machine_timer_locals_dict_table);
 
-
+// Timer class type 
 const mp_obj_type_t machine_timer_type = {
     { &mp_type_type },
-    .name = MP_QSTR_Timer,
-    .print = machine_timer_print,
-    .make_new = machine_timer_make_new,
-    .locals_dict = (mp_obj_t)&machine_timer_locals_dict,
+    .name = MP_QSTR_Timer,                                  // Name Timer
+    .print = machine_timer_print,                           // __str__()            
+    .make_new = machine_timer_make_new,                     // constructor __init__()
+    .locals_dict = (mp_obj_t)&machine_timer_locals_dict,    // local variables and methods
 };
 
 // has no make new-> no instance can be created. Maybe add in the future with more modes.

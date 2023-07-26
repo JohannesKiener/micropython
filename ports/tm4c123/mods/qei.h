@@ -43,7 +43,7 @@ typedef struct _machine_qei_obj_t {
     
     bool max_pos;
     bool both_phases;
-    bool mode;
+    bool clk_dir;
     bool idx_reset;
     bool swap;
     mp_obj_t call_back_fun;
